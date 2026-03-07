@@ -75,6 +75,12 @@ db.exec(`
     FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE,
     FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE SET NULL
   );
+
+  CREATE TABLE IF NOT EXISTS users (
+    login TEXT PRIMARY KEY,
+    role TEXT NOT NULL
+  );
+
 `);
 
 export default db;
