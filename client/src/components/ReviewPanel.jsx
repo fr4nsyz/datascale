@@ -1,0 +1,302 @@
+import { useState } from 'react';
+import { useStore } from '../store';
+import * as api from '../api';
+
+const SEVERITY_COLORS = {
+  error: '#ff4a4a',
+  warning: '#ffff4a',
+  info: '#4a9eff',
+};
+
+const SEVERITY_LABELS = {
+  error: '!!',
+  warning: '!',
+  info: 'i',
+};
+
+export default function ReviewPanel({ isOpen, onClose }) {
+  const currentImage = useStore((s) => s.currentImage);
+  const reviewIssues = useStore((s) => s.reviewIssues);
+  const setReviewIssues = useStore((s) => s.setReviewIssues);
+  const annotations = useStore((s) => s.annotations);
+  const updateAnnotation = useStore((s) => s.updateAnnotation);
+  const removeAnnotation = useStore((s) => s.removeAnnotation);
+  const setSelectedAnnotation = useStore((s) => s.setSelectedAnnotation);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleRunReview() {
+    if (!currentImage) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.qualityReview(currentImage.id);
+      const issues = result.issues || result || [];
+      setReviewIssues(Array.isArray(issues) ? issues : []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAcceptFix(issue, idx) {
+    if (issue.fix) {
+      try {
+        if (issue.fix.action === 'delete' && issue.fix.annotation_id) {
+          await api.deleteAnnotation(issue.fix.annotation_id);
+          removeAnnotation(issue.fix.annotation_id);
+        } else if (issue.fix.action === 'update' && issue.fix.annotation_id && issue.fix.data) {
+          await api.updateAnnotation(issue.fix.annotation_id, issue.fix.data);
+          updateAnnotation(issue.fix.annotation_id, issue.fix.data);
+        }
+      } catch (err) {
+        console.error('Failed to apply fix:', err);
+      }
+    }
+    const updated = reviewIssues.filter((_, i) => i !== idx);
+    setReviewIssues(updated);
+  }
+
+  function handleDismiss(idx) {
+    const updated = reviewIssues.filter((_, i) => i !== idx);
+    setReviewIssues(updated);
+  }
+
+  function handleView(issue) {
+    if (issue.annotation_id) {
+      const ann = annotations.find((a) => a.id === issue.annotation_id);
+      if (ann) {
+        setSelectedAnnotation(ann);
+      }
+    }
+  }
+
+  if (!isOpen) return null;
+
+  const sortedIssues = [...reviewIssues].sort((a, b) => {
+    const order = { error: 0, warning: 1, info: 2 };
+    return (order[a.severity] ?? 3) - (order[b.severity] ?? 3);
+  });
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          width: 560,
+          maxHeight: '80vh',
+          background: '#1e1e1e',
+          borderRadius: 12,
+          border: '1px solid #3d3d3d',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid #3d3d3d',
+            background: '#252525',
+          }}
+        >
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#e0e0e0' }}>
+            Quality Review
+          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={handleRunReview}
+              disabled={loading || !currentImage}
+              style={{
+                padding: '6px 14px',
+                background: loading ? '#3d3d3d' : '#4a9eff',
+                color: loading ? '#888' : '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: loading || !currentImage ? 'default' : 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {loading ? 'Reviewing...' : 'Run Review'}
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#888',
+                cursor: 'pointer',
+                fontSize: 20,
+                padding: '0 4px',
+                lineHeight: 1,
+              }}
+            >
+              x
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {error && (
+            <div
+              style={{
+                padding: '12px 16px',
+                background: '#ff4a4a22',
+                border: '1px solid #ff4a4a44',
+                borderRadius: 6,
+                color: '#ff4a4a',
+                fontSize: 13,
+                marginBottom: 12,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {!currentImage && (
+            <div style={{ textAlign: 'center', color: '#666', padding: 40, fontSize: 13 }}>
+              Select an image to run quality review
+            </div>
+          )}
+
+          {currentImage && sortedIssues.length === 0 && !loading && (
+            <div style={{ textAlign: 'center', color: '#666', padding: 40, fontSize: 13 }}>
+              {reviewIssues.length === 0
+                ? 'Click "Run Review" to check annotation quality'
+                : 'All issues resolved'}
+            </div>
+          )}
+
+          {loading && sortedIssues.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#888', padding: 40, fontSize: 13 }}>
+              Analyzing annotations...
+            </div>
+          )}
+
+          {sortedIssues.map((issue, idx) => {
+            const severity = issue.severity || 'info';
+            const color = SEVERITY_COLORS[severity] || '#888';
+            return (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  gap: 12,
+                  padding: '12px 16px',
+                  background: '#252525',
+                  borderRadius: 8,
+                  border: `1px solid ${color}33`,
+                  marginBottom: 8,
+                }}
+              >
+                {/* Severity icon */}
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    background: `${color}22`,
+                    border: `1px solid ${color}66`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {SEVERITY_LABELS[severity] || '?'}
+                </div>
+
+                {/* Content */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: '#e0e0e0', marginBottom: 4 }}>
+                    {issue.message}
+                  </div>
+                  {issue.suggestion && (
+                    <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
+                      Suggestion: {issue.suggestion}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {issue.fix && (
+                      <button
+                        onClick={() => handleAcceptFix(issue, idx)}
+                        style={{
+                          padding: '3px 10px',
+                          background: '#4aff4a22',
+                          border: '1px solid #4aff4a66',
+                          borderRadius: 4,
+                          color: '#4aff4a',
+                          cursor: 'pointer',
+                          fontSize: 11,
+                        }}
+                      >
+                        Accept Fix
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDismiss(idx)}
+                      style={{
+                        padding: '3px 10px',
+                        background: '#55555522',
+                        border: '1px solid #55555566',
+                        borderRadius: 4,
+                        color: '#888',
+                        cursor: 'pointer',
+                        fontSize: 11,
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                    {issue.annotation_id && (
+                      <button
+                        onClick={() => handleView(issue)}
+                        style={{
+                          padding: '3px 10px',
+                          background: '#4a9eff22',
+                          border: '1px solid #4a9eff66',
+                          borderRadius: 4,
+                          color: '#4a9eff',
+                          cursor: 'pointer',
+                          fontSize: 11,
+                        }}
+                      >
+                        View
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

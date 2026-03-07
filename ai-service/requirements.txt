@@ -1,0 +1,10 @@
+torch
+segment-anything
+mobile-sam
+open-clip-torch
+fastapi
+uvicorn
+python-multipart
+aiofiles
+Pillow
+numpy

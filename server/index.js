@@ -1,0 +1,81 @@
+import express from 'express';
+import cors from 'cors';
+import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import { setupWebSocket } from './websocket.js';
+import projectsRouter from './routes/projects.js';
+import imagesRouter from './routes/images.js';
+import annotationsRouter from './routes/annotations.js';
+import labelsRouter from './routes/labels.js';
+import aiRouter from './routes/ai.js';
+import reviewsRouter from './routes/reviews.js';
+
+// Ensure db is initialized (tables created on import)
+import './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// CORS — allow localhost origins
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
+// Body parsing
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Static file serving for uploads
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
+// Middleware: extract Tailscale user identity
+app.use((req, res, next) => {
+  req.user = req.headers['tailscale-user-login']
+    || req.headers['x-webauth-user']
+    || 'local-user';
+  next();
+});
+
+// Mount routes
+app.use('/api/projects', projectsRouter);
+app.use('/api/projects/:projectId/images', imagesRouter);
+app.use('/api/annotations', annotationsRouter);
+app.use('/api/projects/:projectId/labels', labelsRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/reviews', reviewsRouter);
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', user: req.user });
+});
+
+// Error handling middleware
+app.use((err, req, res, _next) => {
+  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  const status = err.status || 500;
+  res.status(status).json({
+    error: err.message || 'Internal server error',
+  });
+});
+
+// Create HTTP server and attach WebSocket
+const server = http.createServer(app);
+setupWebSocket(server);
+
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`dataTail server listening on http://127.0.0.1:${PORT}`);
+});
+
+export default app;
