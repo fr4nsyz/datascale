@@ -23,6 +23,7 @@ export default function ProjectView() {
   const setCurrentImage = useStore((s) => s.setCurrentImage);
   const images = useStore((s) => s.images);
   const currentImage = useStore((s) => s.currentImage);
+  const clearChat = useStore((s) => s.clearChat);
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -60,15 +61,15 @@ export default function ProjectView() {
 
         setImages(imgs);
         setLabelClasses(labels);
+        setAnnotations([]);
+        clearChat();
 
         if (labels.length > 0) {
           setActiveLabel(labels[0]);
         }
 
-        // Select first image if none selected
-        if (imgs.length > 0 && !currentImage) {
-          setCurrentImage(imgs[0]);
-        }
+        // Always select the first image of the new project (or clear if empty)
+        setCurrentImage(imgs.length > 0 ? imgs[0] : null);
       } catch (err) {
         console.error('Failed to load project:', err);
       } finally {

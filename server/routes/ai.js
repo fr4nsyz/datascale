@@ -180,6 +180,56 @@ router.post('/clip/search', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/agent/chat — Ollama-powered tool-calling agent
+router.post('/agent/chat', async (req, res, next) => {
+  try {
+    const { image_id, project_id, message, history } = req.body;
+
+    if (!image_id || !message) {
+      return res.status(400).json({ error: 'image_id and message are required' });
+    }
+
+    // Build context from DB
+    const annotations = db.prepare(
+      'SELECT id, label, type, data, confidence, source FROM annotations WHERE image_id = ?'
+    ).all(image_id);
+
+    const labelClasses = db.prepare(
+      'SELECT name, color FROM label_classes WHERE project_id = ?'
+    ).all(project_id || '');
+
+    const imageCount = project_id
+      ? db.prepare('SELECT COUNT(*) as count FROM images WHERE project_id = ?').get(project_id).count
+      : 0;
+
+    const context = { annotations, labelClasses, imageCount };
+
+    // Proxy to AI service
+    const result = await proxyWithImage('/agent/chat', image_id, {
+      message,
+      context: JSON.stringify(context),
+      history: JSON.stringify(history || []),
+    });
+
+    // Execute returned actions on the DB
+    if (result.actions && Array.isArray(result.actions)) {
+      for (const action of result.actions) {
+        if (action.action === 'remove') {
+          db.prepare('DELETE FROM annotations WHERE image_id = ? AND label = ?')
+            .run(image_id, action.label);
+        } else if (action.action === 'relabel') {
+          db.prepare('UPDATE annotations SET label = ? WHERE image_id = ? AND label = ?')
+            .run(action.new_label, image_id, action.old_label);
+        }
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/ai/agent/nl-annotate — natural language annotation
 router.post('/agent/nl-annotate', async (req, res, next) => {
   try {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import re
@@ -9,11 +10,12 @@ from collections import Counter, defaultdict
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+import ollama
 import torch
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from models import DEVICE, get_clip_model, get_clip_preprocess, get_clip_tokenizer, get_sam_model
+from models import DEVICE, get_clip_model, get_clip_preprocess, get_clip_tokenizer, get_sam_model, get_sam2_model, get_yolo_world_model
 from utils import (
     compute_iou,
     crop_region,
@@ -62,6 +64,85 @@ def _segment_everything(np_img: np.ndarray, points_per_side: int = 32) -> list[d
         min_mask_region_area=100,
     )
     return generator.generate(np_img)
+
+
+def _segment_everything_sam2(pil_img) -> list[dict]:
+    """Use ultralytics SAM2 for segment-everything. Returns list of dicts
+    with 'bbox' [x,y,w,h], 'segmentation' (binary mask), and 'area'."""
+    import tempfile
+    sam2 = get_sam2_model()
+
+    # SAM2 needs a file path
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        pil_img.save(f, format="JPEG")
+        tmp_path = f.name
+
+    try:
+        results = sam2.predict(tmp_path, stream=False)
+    finally:
+        import os
+        os.unlink(tmp_path)
+
+    masks_data = []
+    if results and results[0].masks is not None:
+        masks = results[0].masks.data.cpu().numpy()
+        boxes = results[0].boxes.xyxy.cpu().numpy()
+        for i in range(len(masks)):
+            binary = masks[i].astype(np.uint8)
+            x1, y1, x2, y2 = boxes[i]
+            x, y, w, h = int(x1), int(y1), int(x2 - x1), int(y2 - y1)
+            area = int(binary.sum())
+            masks_data.append({
+                "bbox": [x, y, w, h],
+                "segmentation": binary,
+                "area": area,
+            })
+    return masks_data
+
+
+def _detect_and_segment(pil_img, labels: list[str], conf: float = 0.2) -> list[dict]:
+    """Use YOLO-World for detection + SAM2 for precise masks.
+    Returns list of dicts with label, confidence, bbox, segmentation mask."""
+    import tempfile, os
+
+    yolo = get_yolo_world_model()
+    sam2 = get_sam2_model()
+
+    # Save image to temp file (ultralytics needs a path)
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        pil_img.save(f, format="JPEG")
+        tmp_path = f.name
+
+    try:
+        # Step 1: YOLO-World detects objects by text labels
+        yolo.set_classes(labels)
+        det_results = yolo.predict(tmp_path, conf=conf, verbose=False)[0]
+
+        if len(det_results.boxes) == 0:
+            return []
+
+        # Step 2: SAM2 generates precise masks using detected bboxes
+        bboxes = det_results.boxes.xyxy.cpu().numpy().tolist()
+        seg_results = sam2.predict(tmp_path, bboxes=bboxes, verbose=False)[0]
+
+        results = []
+        for i, box in enumerate(det_results.boxes):
+            cls_idx = int(box.cls[0])
+            confidence = float(box.conf[0])
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            x, y, w, h = int(x1), int(y1), int(x2 - x1), int(y2 - y1)
+
+            binary = seg_results.masks.data[i].cpu().numpy().astype(np.uint8)
+            results.append({
+                "label": yolo.names[cls_idx],
+                "confidence": round(confidence, 3),
+                "bbox": [x, y, w, h],
+                "segmentation": binary,
+            })
+
+        return results
+    finally:
+        os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -525,4 +606,443 @@ async def dataset_health(
         per_annotator=per_annotator,
         quality_score=quality_score,
         warnings=warnings,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /agent/chat — Ollama-powered tool-calling agent
+# ---------------------------------------------------------------------------
+
+OLLAMA_MODEL = "qwen2.5:3b"
+
+AGENT_SYSTEM_PROMPT = """You are dataTail, an AI annotation assistant.
+You help users annotate images in a dataset by calling tools.
+Always use the provided tools to fulfill requests. Do not ask for images - you already have access to the image through tools.
+Be concise. Report results and suggest next steps.
+When the user asks to annotate or find objects, use segment_and_annotate.
+When asking about existing annotations, use get_annotation_summary.
+When asked to remove annotations, use remove_annotations.
+When asked to relabel/rename annotations, use relabel_annotations.
+When asked to check quality, use quality_check.
+You can chain multiple tools in one turn if needed."""
+
+TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "segment_and_annotate",
+            "description": "Find and segment all objects matching a label in the current image using AI vision (SAM + CLIP). Returns candidate annotations with bounding boxes and polygons for user review.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "description": "Object class to find, e.g. 'car', 'person', 'dog'",
+                    },
+                    "confidence_threshold": {
+                        "type": "number",
+                        "description": "Minimum confidence score 0-1, default 0.25",
+                    },
+                },
+                "required": ["label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_objects",
+            "description": "Count how many objects matching a label are visible in the current image. Uses AI vision to detect and count.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "description": "Object class to count, e.g. 'car', 'person'",
+                    },
+                },
+                "required": ["label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "describe_image",
+            "description": "Describe what objects are visible in the current image using CLIP classification against common categories.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_annotation_summary",
+            "description": "Get a summary of existing annotations on the current image, including label counts and totals.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_annotations",
+            "description": "Remove all annotations with a specific label from the current image.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "description": "Label of annotations to remove",
+                    },
+                },
+                "required": ["label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "relabel_annotations",
+            "description": "Change the label of all annotations from one label to another on the current image.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "old_label": {
+                        "type": "string",
+                        "description": "Current label to change from",
+                    },
+                    "new_label": {
+                        "type": "string",
+                        "description": "New label to change to",
+                    },
+                },
+                "required": ["old_label", "new_label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quality_check",
+            "description": "Run a quality check on the current image's annotations, looking for label mismatches, missing annotations, and geometric anomalies.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+]
+
+COMMON_CATEGORIES = [
+    "person", "car", "truck", "bus", "bicycle", "motorcycle",
+    "dog", "cat", "bird", "horse", "cow", "sheep",
+    "tree", "building", "house", "road", "sign", "traffic light",
+    "chair", "table", "bottle", "cup", "food", "flower",
+    "sky", "grass", "water", "mountain", "sidewalk", "fence",
+]
+
+
+async def _execute_tool(
+    name: str,
+    args: dict,
+    np_img: np.ndarray | None,
+    pil_img: Any | None,
+    context: dict,
+) -> dict:
+    """Dispatch a tool call and return the result dict."""
+
+    if name == "segment_and_annotate":
+        label = args.get("label", "object")
+        threshold = args.get("confidence_threshold", 0.2)
+        if pil_img is None:
+            return {"error": "No image available", "summary": "No image provided."}
+
+        # Use YOLO-World + SAM2 for accurate detection + segmentation
+        detections = _detect_and_segment(pil_img, [label], conf=threshold)
+
+        annotations = []
+        for det in detections:
+            binary = det["segmentation"]
+            annotations.append({
+                "label": det["label"],
+                "confidence": det["confidence"],
+                "bbox": det["bbox"],
+                "polygon": mask_to_polygon(binary),
+                "rle": mask_to_rle(binary),
+            })
+
+        annotations.sort(key=lambda m: m["confidence"], reverse=True)
+        return {
+            "annotations": annotations,
+            "summary": f"Found {len(annotations)} '{label}' object(s).",
+        }
+
+    elif name == "count_objects":
+        label = args.get("label", "object")
+        if pil_img is None:
+            return {"count": 0, "summary": "No image provided."}
+
+        detections = _detect_and_segment(pil_img, [label], conf=0.2)
+        count = len(detections)
+
+        return {
+            "count": count,
+            "summary": f"Counted {count} '{label}' object(s) in the image.",
+        }
+
+    elif name == "describe_image":
+        if pil_img is None:
+            return {"summary": "No image provided."}
+
+        text_emb = _clip_encode_text(COMMON_CATEGORIES)
+        img_emb = _clip_encode_image_pil(pil_img)
+        sims = text_emb @ img_emb
+        exp = np.exp(sims - sims.max())
+        probs = exp / exp.sum()
+
+        ranked = sorted(zip(COMMON_CATEGORIES, probs.tolist()), key=lambda x: x[1], reverse=True)
+        top5 = ranked[:5]
+        descriptions = [f"{cat} ({score:.1%})" for cat, score in top5]
+        return {
+            "top_categories": [{"category": cat, "score": round(score, 3)} for cat, score in top5],
+            "summary": f"Image likely contains: {', '.join(descriptions)}.",
+        }
+
+    elif name == "get_annotation_summary":
+        annotations = context.get("annotations", [])
+        if not annotations:
+            return {"summary": "No annotations on this image yet.", "total": 0, "labels": {}}
+        label_counts: dict[str, int] = {}
+        for ann in annotations:
+            lbl = ann.get("label", "unlabeled")
+            label_counts[lbl] = label_counts.get(lbl, 0) + 1
+        parts = [f"{count} {label}" for label, count in label_counts.items()]
+        return {
+            "total": len(annotations),
+            "labels": label_counts,
+            "summary": f"{len(annotations)} annotation(s): {', '.join(parts)}.",
+        }
+
+    elif name == "remove_annotations":
+        label = args.get("label", "")
+        annotations = context.get("annotations", [])
+        count = sum(1 for a in annotations if a.get("label") == label)
+        return {
+            "action": "remove",
+            "label": label,
+            "count": count,
+            "summary": f"Will remove {count} '{label}' annotation(s) from the current image.",
+        }
+
+    elif name == "relabel_annotations":
+        old_label = args.get("old_label", "")
+        new_label = args.get("new_label", "")
+        annotations = context.get("annotations", [])
+        count = sum(1 for a in annotations if a.get("label") == old_label)
+        return {
+            "action": "relabel",
+            "old_label": old_label,
+            "new_label": new_label,
+            "count": count,
+            "summary": f"Will relabel {count} annotation(s) from '{old_label}' to '{new_label}'.",
+        }
+
+    elif name == "quality_check":
+        if np_img is None or pil_img is None:
+            return {"summary": "No image provided for quality check."}
+        annotations = context.get("annotations", [])
+        if not annotations:
+            return {"issues": [], "summary": "No annotations to check."}
+
+        # Reuse the quality review logic inline (simplified)
+        issues = []
+        all_labels = list({a.get("label", "") for a in annotations})
+        for ann in annotations:
+            bbox = ann.get("data")
+            if isinstance(bbox, str):
+                try:
+                    bbox = json.loads(bbox)
+                except Exception:
+                    continue
+            if not isinstance(bbox, dict) or "bbox" not in bbox:
+                continue
+            b = bbox["bbox"] if isinstance(bbox.get("bbox"), dict) else bbox
+            if not all(k in b for k in ("x", "y", "w", "h")):
+                continue
+            try:
+                crop = crop_region(pil_img, b)
+            except Exception:
+                issues.append({"type": "geometric_anomaly", "message": f"Invalid bbox for annotation {ann.get('id', '?')}"})
+                continue
+            if crop.width < 2 or crop.height < 2:
+                continue
+            label = ann.get("label", "")
+            img_emb = _clip_encode_image_pil(crop)
+            candidate_labels = all_labels if len(all_labels) > 1 else [label, "other"]
+            text_emb = _clip_encode_text(candidate_labels)
+            sims = text_emb @ img_emb
+            exp = np.exp(sims - sims.max())
+            probs = exp / exp.sum()
+            label_idx = candidate_labels.index(label) if label in candidate_labels else -1
+            if label_idx >= 0:
+                best_idx = int(np.argmax(probs))
+                if best_idx != label_idx and float(probs[best_idx]) > float(probs[label_idx]) * 1.5:
+                    issues.append({
+                        "type": "label_mismatch",
+                        "message": f"'{ann.get('id', '?')}' labelled '{label}' but looks like '{candidate_labels[best_idx]}'",
+                    })
+
+        return {
+            "issues": issues,
+            "summary": f"Quality check found {len(issues)} issue(s) across {len(annotations)} annotation(s).",
+        }
+
+    return {"error": f"Unknown tool: {name}", "summary": f"Unknown tool '{name}'."}
+
+
+async def _run_agent_loop(
+    message: str,
+    np_img: np.ndarray | None,
+    pil_img: Any | None,
+    context: dict,
+    history: list[dict],
+) -> dict:
+    """Run the Ollama tool-calling agent loop."""
+    messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": message})
+
+    all_annotations: list[dict] = []
+    all_actions: list[dict] = []
+    response = None
+
+    for _ in range(5):  # max iterations to prevent infinite loops
+        try:
+            response = ollama.chat(
+                model=OLLAMA_MODEL,
+                messages=messages,
+                tools=TOOL_DEFINITIONS,
+            )
+        except Exception as exc:
+            logger.error("Ollama chat failed: %s", exc)
+            return {
+                "message": f"LLM error: {exc}. Make sure Ollama is running with model '{OLLAMA_MODEL}'.",
+                "annotations": [],
+                "actions": [],
+                "history": messages,
+            }
+
+        msg = response.message
+        tool_calls = msg.tool_calls or []
+
+        if not tool_calls:
+            # LLM is done — has a text response
+            break
+
+        # Append the assistant message with tool calls
+        messages.append({
+            "role": "assistant",
+            "content": msg.content or "",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    }
+                }
+                for tc in tool_calls
+            ],
+        })
+
+        # Execute each tool call
+        for tc in tool_calls:
+            tool_name = tc.function.name
+            tool_args = tc.function.arguments if isinstance(tc.function.arguments, dict) else {}
+
+            logger.info("Agent calling tool: %s(%s)", tool_name, tool_args)
+
+            result = await _execute_tool(tool_name, tool_args, np_img, pil_img, context)
+
+            if "annotations" in result:
+                all_annotations.extend(result["annotations"])
+            if "action" in result:
+                all_actions.append(result)
+
+            # Feed result back to LLM
+            messages.append({
+                "role": "tool",
+                "content": json.dumps(result.get("summary", result)),
+            })
+
+    # Extract final text response
+    final_message = ""
+    if response and response.message:
+        final_message = response.message.content or ""
+
+    # If LLM didn't produce a text response, generate a summary
+    if not final_message:
+        parts = []
+        if all_annotations:
+            parts.append(f"Found {len(all_annotations)} annotation candidate(s).")
+        if all_actions:
+            for a in all_actions:
+                parts.append(a.get("summary", ""))
+        final_message = " ".join(parts) if parts else "Done."
+
+    # Build history for multi-turn (only keep user/assistant messages)
+    output_history = [m for m in messages if m["role"] in ("user", "assistant") and "tool_calls" not in m]
+
+    return {
+        "message": final_message,
+        "annotations": all_annotations,
+        "actions": all_actions,
+        "history": output_history,
+    }
+
+
+class AgentChatResponse(BaseModel):
+    message: str
+    annotations: List[Dict[str, Any]]
+    actions: List[Dict[str, Any]]
+    history: List[Dict[str, Any]]
+
+
+@router.post("/chat", response_model=AgentChatResponse)
+async def agent_chat(
+    image: UploadFile = File(...),
+    message: str = Form(...),
+    context: str = Form("{}"),
+    history: str = Form("[]"),
+):
+    """Ollama-powered tool-calling agent for natural-language annotation.
+
+    Receives a user message, image, and DB context. Uses Ollama to decide
+    which tools to call (SAM/CLIP vision tools, context queries, DB actions),
+    executes them, and returns a conversational response with any annotations
+    or structured actions for the server to execute.
+    """
+    try:
+        ctx = json.loads(context)
+    except (json.JSONDecodeError, TypeError):
+        ctx = {}
+
+    try:
+        hist = json.loads(history)
+    except (json.JSONDecodeError, TypeError):
+        hist = []
+
+    pil_img, np_img = await image_from_upload(image)
+
+    result = await _run_agent_loop(message, np_img, pil_img, ctx, hist)
+
+    return AgentChatResponse(
+        message=result["message"],
+        annotations=result["annotations"],
+        actions=result["actions"],
+        history=result["history"],
     )

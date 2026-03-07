@@ -21,7 +21,10 @@ export const useStore = create((set, get) => ({
   annotations: [],
   selectedAnnotation: null,
   setAnnotations: (annotations) => set({ annotations }),
-  addAnnotation: (ann) => set(s => ({ annotations: [...s.annotations, ann] })),
+  addAnnotation: (ann) => set(s => {
+    if (ann.id && s.annotations.some(a => a.id === ann.id)) return s;
+    return { annotations: [...s.annotations, ann] };
+  }),
   updateAnnotation: (id, data) => set(s => ({
     annotations: s.annotations.map(a => a.id === id ? { ...a, ...data } : a)
   })),
@@ -56,7 +59,11 @@ export const useStore = create((set, get) => ({
   // Chat messages (NL annotation)
   chatMessages: [],
   addChatMessage: (msg) => set(s => ({ chatMessages: [...s.chatMessages, msg] })),
-  clearChat: () => set({ chatMessages: [] }),
+  clearChat: () => set({ chatMessages: [], chatHistory: [] }),
+
+  // Ollama conversation history (for multi-turn agent chat)
+  chatHistory: [],
+  setChatHistory: (history) => set({ chatHistory: history }),
 
   // Review issues
   reviewIssues: [],

@@ -169,6 +169,15 @@ export async function clipEmbed(imageId) {
   });
 }
 
+export async function agentChat(imageId, message, projectId, history = []) {
+  return jsonPost(`${API}/ai/agent/chat`, {
+    image_id: imageId,
+    project_id: projectId,
+    message,
+    history,
+  });
+}
+
 export async function nlAnnotate(imageId, command, projectId) {
   return jsonPost(`${API}/ai/agent/nl-annotate`, {
     image_id: imageId,

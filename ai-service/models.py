@@ -44,6 +44,8 @@ MOBILE_SAM_URL = (
 
 _sam_predictor = None
 _sam_model = None  # keep a reference to the raw model for the mask generator
+_sam2_model = None  # ultralytics SAM2 model
+_yolo_world_model = None  # YOLO-World open-vocabulary detector
 _clip_model = None
 _clip_preprocess = None
 _clip_tokenizer = None
@@ -72,12 +74,14 @@ def _load_sam() -> None:
 
     model_type = "vit_t"
     sam = sam_model_registry[model_type](checkpoint=str(MOBILE_SAM_CHECKPOINT))
-    sam.to(device=DEVICE)
+    # MPS doesn't support float64 which SAM's automatic mask generator needs,
+    # so always load SAM on CPU to avoid runtime errors.
+    sam.to(device="cpu")
     sam.eval()
 
     _sam_model = sam
     _sam_predictor = SamPredictor(sam)
-    logger.info("MobileSAM loaded on %s", DEVICE)
+    logger.info("MobileSAM loaded on cpu (MPS incompatible with SAM float64 ops)")
 
 
 def get_sam_predictor():
@@ -92,6 +96,46 @@ def get_sam_model():
     if _sam_model is None:
         _load_sam()
     return _sam_model
+
+
+# ---------------------------------------------------------------------------
+# SAM2 (via ultralytics) — more accurate than MobileSAM
+# ---------------------------------------------------------------------------
+
+def _load_sam2() -> None:
+    """Load SAM2 via ultralytics. Auto-downloads weights on first use."""
+    global _sam2_model
+    from ultralytics import SAM
+
+    _sam2_model = SAM("sam2.1_t.pt")
+    logger.info("SAM2 (sam2.1_t) loaded via ultralytics")
+
+
+def get_sam2_model():
+    """Return the cached ultralytics SAM2 model."""
+    if _sam2_model is None:
+        _load_sam2()
+    return _sam2_model
+
+
+# ---------------------------------------------------------------------------
+# YOLO-World (open-vocabulary object detection)
+# ---------------------------------------------------------------------------
+
+def _load_yolo_world() -> None:
+    """Load YOLO-World for open-vocabulary detection. Auto-downloads weights."""
+    global _yolo_world_model
+    from ultralytics import YOLOWorld
+
+    _yolo_world_model = YOLOWorld("yolov8x-worldv2.pt")
+    logger.info("YOLO-World (yolov8x-worldv2) loaded")
+
+
+def get_yolo_world_model():
+    """Return the cached YOLO-World model."""
+    if _yolo_world_model is None:
+        _load_yolo_world()
+    return _yolo_world_model
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ AI FEATURES:
 - User clicks a point on an object -> MobileSAM generates a pixel-perfect mask
 
 [X] Segment Everything 
+- Fix segment everything to use the other approach (natural language)
 - Click one button: SAM auto-segments every object in the image
 - User then just assigns labels to pre-cut segments 
 - Turns annotation from "draw and label" to just label 
@@ -29,7 +30,7 @@ User flow:                                                                      
   │   -> User reviews, accepts/rejects each suggestion                  
 
 [] Quality Review Agent
-
+- TO IMPLEMENT SOON
 Runs automated checks using CLIP + geometric analysis:                                     │                                  
   │                                                                                            │                                  
   │ a) Label-region consistency (CLIP)                                                         │                                  

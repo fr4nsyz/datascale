@@ -993,6 +993,9 @@ export default function AnnotationCanvas({ onAnnotationCreated, annotationsVisib
   // -----------------------------------------------------------------------
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return;
+      }
       if (e.code === 'Space' && !e.repeat) {
         isSpaceDown.current = true;
         e.preventDefault();

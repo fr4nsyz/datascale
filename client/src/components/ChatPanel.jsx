@@ -14,9 +14,12 @@ export default function ChatPanel({ uiScale = 1 }) {
   const currentImage = useStore((s) => s.currentImage);
   const addChatMessage = useStore((s) => s.addChatMessage);
   const chatMessages = useStore((s) => s.chatMessages);
-  const addAnnotation = useStore((s) => s.addAnnotation);
   const currentProject = useStore((s) => s.currentProject);
   const activeLabel = useStore((s) => s.activeLabel);
+  const chatHistory = useStore((s) => s.chatHistory);
+  const setChatHistory = useStore((s) => s.setChatHistory);
+  const setAnnotations = useStore((s) => s.setAnnotations);
+  const setAiResults = useStore((s) => s.setAiResults);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -70,16 +73,51 @@ export default function ChatPanel({ uiScale = 1 }) {
     });
 
     try {
-      const result = await api.nlAnnotate(currentImage.id, command, currentProject?.id);
-      const annotations = result.annotations || [];
-      const message = result.message || `Found ${annotations.length} result(s)`;
+      const result = await api.agentChat(
+        currentImage.id,
+        command,
+        currentProject?.id,
+        chatHistory,
+      );
+
+      const resultAnnotations = result.annotations || [];
+      const message = result.message || `Found ${resultAnnotations.length} result(s)`;
+
+      // Update conversation history for multi-turn
+      if (result.history) {
+        setChatHistory(result.history);
+      }
+
+      // If there were DB actions (remove/relabel), refresh annotations
+      if (result.actions && result.actions.length > 0) {
+        try {
+          const fresh = await api.fetchAnnotations(currentImage.id);
+          setAnnotations(fresh);
+        } catch {
+          // ignore refresh errors
+        }
+      }
+
+      // Push annotation candidates to canvas as AI suggestions (same UX as segment everything)
+      if (resultAnnotations.length > 0) {
+        const suggestions = resultAnnotations.map((ann) => ({
+          data: ann.polygon,
+          polygon: ann.polygon,
+          score: ann.confidence ?? null,
+          bbox: ann.bbox,
+          rle: ann.rle,
+          label: ann.label || activeLabel?.name || null,
+          source: 'nl-agent',
+          type: 'polygon',
+        }));
+        setAiResults(suggestions);
+      }
 
       // Remove the loading message by adding a completed one
       addChatMessage({
         id: Date.now() + 2,
         role: 'assistant',
         text: message,
-        annotations: annotations,
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
@@ -91,38 +129,6 @@ export default function ChatPanel({ uiScale = 1 }) {
         timestamp: new Date().toISOString(),
       });
     }
-  }
-
-  async function handleAcceptAnnotation(ann, msgId) {
-    if (!currentImage || !currentProject) return;
-    try {
-      const created = await api.createAnnotation({
-        image_id: currentImage.id,
-        project_id: currentProject.id,
-        label: ann.label || activeLabel?.name || 'unlabeled',
-        type: ann.type || 'polygon',
-        data: ann.data,
-        source: 'nl-annotate',
-      });
-      addAnnotation(created);
-      addChatMessage({
-        id: Date.now(),
-        role: 'system',
-        text: `Accepted annotation: ${ann.label || 'unlabeled'}`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error('Failed to accept annotation:', err);
-    }
-  }
-
-  function handleRejectAnnotation(ann, msgId) {
-    addChatMessage({
-      id: Date.now(),
-      role: 'system',
-      text: `Dismissed suggestion: ${ann.label || 'unlabeled'}`,
-      timestamp: new Date().toISOString(),
-    });
   }
 
   if (!isOpen) {
@@ -292,62 +298,6 @@ export default function ChatPanel({ uiScale = 1 }) {
               >
                 {msg.text}
               </div>
-
-              {msg.annotations && msg.annotations.length > 0 && (
-                <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {msg.annotations.map((ann, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 8px',
-                        background: '#2a2a2a',
-                        borderRadius: 6,
-                        border: '1px solid #3d3d3d',
-                      }}
-                    >
-                      <span style={{ fontSize: 12, color: '#e0e0e0', flex: 1 }}>
-                        {ann.label || 'unlabeled'}
-                      </span>
-                      {ann.confidence != null && (
-                        <span style={{ fontSize: 10, color: '#888' }}>
-                          {Math.round(ann.confidence * 100)}%
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleAcceptAnnotation(ann, msg.id)}
-                        style={{
-                          background: '#4aff4a33',
-                          border: '1px solid #4aff4a66',
-                          color: '#4aff4a',
-                          cursor: 'pointer',
-                          fontSize: 10,
-                          padding: '2px 6px',
-                          borderRadius: 3,
-                        }}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleRejectAnnotation(ann, msg.id)}
-                        style={{
-                          background: '#ff4a4a33',
-                          border: '1px solid #ff4a4a66',
-                          color: '#ff4a4a',
-                          cursor: 'pointer',
-                          fontSize: 10,
-                          padding: '2px 6px',
-                          borderRadius: 3,
-                        }}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           );
         })}
