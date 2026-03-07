@@ -78,7 +78,7 @@ app.delete('/api/images/:imageId', (req, res) => {
   const image = db.prepare('SELECT * FROM images WHERE id = ?').get(req.params.imageId);
   if (!image) return res.status(404).json({ error: 'Image not found' });
   const filePath = path.join(__dirname, '..', 'uploads', image.project_id, image.filename);
-  try { fs.unlinkSync(filePath); } catch {}
+  try { fs.unlinkSync(filePath); } catch { }
   db.prepare('DELETE FROM images WHERE id = ?').run(req.params.imageId);
   res.json({ success: true });
 });
