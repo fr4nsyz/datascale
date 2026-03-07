@@ -131,14 +131,13 @@ export default function ProjectView() {
         {/* Sidebar on the LEFT (icon tabs + content panel) */}
         <Sidebar />
 
-        {/* Center: Canvas + BottomBar stacked vertically */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Center: Canvas + BottomBar stacked vertically, with Toolbar overlaid */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
           <AnnotationCanvas annotationsVisible={annotationsVisible} />
           <BottomBar />
+          {/* Toolbar floats over the right edge */}
+          <Toolbar onToggleChat={() => setChatOpen((v) => !v)} />
         </div>
-
-        {/* Toolbar on the RIGHT (tool strip) */}
-        <Toolbar onToggleChat={() => setChatOpen((v) => !v)} />
       </div>
 
       {/* ChatPanel at the very bottom (collapsible) */}

@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useStore } from '../store';
 import * as api from '../api';
 
@@ -32,12 +32,12 @@ const defaultColors = ['#4a9eff', '#ff4a4a', '#4aff4a', '#ffff4a', '#ff4aff', '#
 // ── Icon Components ──────────────────────────────────────────────────────────
 
 const tabIconProps = {
-  width: 20,
-  height: 20,
+  width: 24,
+  height: 24,
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 1.8,
+  strokeWidth: 1.5,
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
 };
@@ -113,8 +113,8 @@ function TypeBadge({ type }) {
   return (
     <span
       style={{
-        fontSize: 10,
-        padding: '1px 6px',
+        fontSize: 11,
+        padding: '2px 7px',
         borderRadius: 3,
         background: '#f0f0f0',
         color: TEXT_SECONDARY,
@@ -196,6 +196,19 @@ function LabelsPanel() {
     }
   }
 
+  async function handleDeleteClass(lc) {
+    if (!currentProject) return;
+    try {
+      await api.deleteLabel(lc.id, currentProject.id);
+      setLabelClasses(labelClasses.filter((c) => c.id !== lc.id));
+      if (activeLabel?.id === lc.id) {
+        setActiveLabel(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete class:', err);
+    }
+  }
+
   async function handleSegmentEverything() {
     if (!currentImage?.id || isAiProcessing) return;
     setAiProcessing(true);
@@ -227,15 +240,15 @@ function LabelsPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
       <div style={{ padding: '16px 16px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: TEXT_PRIMARY }}>Annotations</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: TEXT_PRIMARY }}>Annotations</span>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               color: ACCENT,
               background: ACCENT_BG,
-              padding: '1px 8px',
+              padding: '3px 10px',
               borderRadius: 10,
             }}
           >
@@ -243,7 +256,7 @@ function LabelsPanel() {
           </span>
         </div>
         {activeLabel && (
-          <div style={{ fontSize: 11, color: TEXT_SECONDARY, marginTop: 2 }}>
+          <div style={{ fontSize: 14, color: TEXT_SECONDARY, marginTop: 4 }}>
             Group: {activeLabel.name}
           </div>
         )}
@@ -263,13 +276,13 @@ function LabelsPanel() {
             onClick={() => setSubTab(tab)}
             style={{
               flex: 1,
-              padding: '8px 0',
-              fontSize: 12,
+              padding: '10px 0',
+              fontSize: 15,
               fontWeight: subTab === tab ? 600 : 400,
               color: subTab === tab ? ACCENT : TEXT_SECONDARY,
               background: 'transparent',
               border: 'none',
-              borderBottom: subTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
+              borderBottom: subTab === tab ? `2.5px solid ${ACCENT}` : '2.5px solid transparent',
               cursor: 'pointer',
               textTransform: 'capitalize',
               transition: 'color 0.15s',
@@ -281,7 +294,7 @@ function LabelsPanel() {
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
         {subTab === 'classes' && (
           <>
             {/* Active / used classes */}
@@ -298,7 +311,7 @@ function LabelsPanel() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 10,
+                    gap: 12,
                     width: '100%',
                     padding: '8px 16px',
                     background: isActive ? ACCENT_BG : 'transparent',
@@ -317,8 +330,8 @@ function LabelsPanel() {
                 >
                   <span
                     style={{
-                      width: 10,
-                      height: 10,
+                      width: 12,
+                      height: 12,
                       borderRadius: '50%',
                       background: lc.color || '#4a9eff',
                       flexShrink: 0,
@@ -326,7 +339,7 @@ function LabelsPanel() {
                   />
                   <span
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: isActive ? ACCENT : TEXT_PRIMARY,
                       fontWeight: isActive ? 600 : 400,
                       flex: 1,
@@ -339,15 +352,41 @@ function LabelsPanel() {
                   </span>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       color: TEXT_SECONDARY,
                       background: '#f0f0f0',
-                      padding: '1px 6px',
+                      padding: '2px 7px',
                       borderRadius: 8,
                       fontWeight: 500,
                     }}
                   >
                     {count}
+                  </span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteClass(lc);
+                    }}
+                    title="Delete class"
+                    style={{
+                      color: TEXT_MUTED,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      borderRadius: 4,
+                      padding: 2,
+                      transition: 'color 0.1s, background 0.1s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = '#e74c3c';
+                      e.currentTarget.style.background = 'rgba(231,76,60,0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = TEXT_MUTED;
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <TrashSmallIcon />
                   </span>
                 </button>
               );
@@ -358,12 +397,10 @@ function LabelsPanel() {
               <>
                 <div
                   style={{
-                    fontSize: 11,
-                    color: TEXT_MUTED,
-                    padding: '12px 16px 6px',
-                    fontWeight: 500,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
+                    fontSize: 14,
+                    color: TEXT_PRIMARY,
+                    padding: '14px 16px 6px',
+                    fontWeight: 600,
                   }}
                 >
                   Unused Classes
@@ -377,9 +414,9 @@ function LabelsPanel() {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 10,
+                        gap: 12,
                         width: '100%',
-                        padding: '6px 16px',
+                        padding: '8px 16px',
                         background: isActive ? ACCENT_BG : 'transparent',
                         border: 'none',
                         borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
@@ -399,8 +436,8 @@ function LabelsPanel() {
                     >
                       <span
                         style={{
-                          width: 10,
-                          height: 10,
+                          width: 12,
+                          height: 12,
                           borderRadius: '50%',
                           background: lc.color || '#4a9eff',
                           flexShrink: 0,
@@ -408,7 +445,7 @@ function LabelsPanel() {
                       />
                       <span
                         style={{
-                          fontSize: 13,
+                          fontSize: 14,
                           color: TEXT_MUTED,
                           flex: 1,
                           overflow: 'hidden',
@@ -434,6 +471,32 @@ function LabelsPanel() {
                       >
                         <SparkleSmallIcon />
                       </span>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClass(lc);
+                        }}
+                        title="Delete class"
+                        style={{
+                          color: TEXT_MUTED,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          borderRadius: 4,
+                          padding: 2,
+                          transition: 'color 0.1s, background 0.1s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#e74c3c';
+                          e.currentTarget.style.background = 'rgba(231,76,60,0.08)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = TEXT_MUTED;
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <TrashSmallIcon />
+                      </span>
                     </button>
                   );
                 })}
@@ -441,7 +504,7 @@ function LabelsPanel() {
             )}
 
             {labelClasses.length === 0 && (
-              <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 12, textAlign: 'center' }}>
+              <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 13, textAlign: 'center' }}>
                 No classes defined yet
               </div>
             )}
@@ -468,8 +531,8 @@ function LabelsPanel() {
               placeholder="Class name"
               style={{
                 width: '100%',
-                fontSize: 13,
-                padding: '6px 10px',
+                fontSize: 14,
+                padding: '8px 10px',
                 background: '#fff',
                 border: `1px solid ${BORDER}`,
                 borderRadius: 6,
@@ -485,8 +548,8 @@ function LabelsPanel() {
                   key={c}
                   onClick={() => setNewLabelColor(c)}
                   style={{
-                    width: 20,
-                    height: 20,
+                    width: 22,
+                    height: 22,
                     borderRadius: 4,
                     background: c,
                     border: newLabelColor === c ? `2px solid ${TEXT_PRIMARY}` : '2px solid transparent',
@@ -502,8 +565,8 @@ function LabelsPanel() {
                 onClick={handleAddLabel}
                 style={{
                   flex: 1,
-                  fontSize: 12,
-                  padding: '6px 12px',
+                  fontSize: 13,
+                  padding: '8px 12px',
                   background: ACCENT,
                   color: '#fff',
                   border: 'none',
@@ -517,8 +580,8 @@ function LabelsPanel() {
               <button
                 onClick={() => setAddingLabel(false)}
                 style={{
-                  fontSize: 12,
-                  padding: '6px 12px',
+                  fontSize: 13,
+                  padding: '8px 12px',
                   background: '#f0f0f0',
                   color: TEXT_SECONDARY,
                   border: 'none',
@@ -537,8 +600,8 @@ function LabelsPanel() {
               onClick={() => setAddingLabel(true)}
               style={{
                 width: '100%',
-                padding: '8px',
-                fontSize: 13,
+                padding: '10px',
+                fontSize: 14,
                 fontWeight: 500,
                 background: '#f8f8f8',
                 color: TEXT_PRIMARY,
@@ -563,8 +626,8 @@ function LabelsPanel() {
               disabled={!currentImage || isAiProcessing}
               style={{
                 width: '100%',
-                padding: '8px',
-                fontSize: 13,
+                padding: '10px',
+                fontSize: 14,
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
@@ -607,11 +670,41 @@ function LayersList() {
   const selectedAnnotation = useStore((s) => s.selectedAnnotation);
   const setSelectedAnnotation = useStore((s) => s.setSelectedAnnotation);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
+  const updateAnnotation = useStore((s) => s.updateAnnotation);
   const labelClasses = useStore((s) => s.labelClasses);
+
+  const [editingLabelId, setEditingLabelId] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!editingLabelId) return;
+    function handleClick(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setEditingLabelId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [editingLabelId]);
 
   function getLabelColor(labelName) {
     const lc = labelClasses.find((l) => l.name === labelName);
     return lc?.color || '#888';
+  }
+
+  async function handleRelabel(ann, newLabelName) {
+    setEditingLabelId(null);
+    if (newLabelName === ann.label) return;
+    try {
+      await api.updateAnnotation(ann.id, { label: newLabelName });
+      updateAnnotation(ann.id, { label: newLabelName });
+      if (selectedAnnotation?.id === ann.id) {
+        setSelectedAnnotation({ ...ann, label: newLabelName });
+      }
+    } catch (err) {
+      console.error('Failed to relabel annotation:', err);
+    }
   }
 
   async function handleDelete(ann) {
@@ -679,7 +772,7 @@ function LayersList() {
 
   if (annotations.length === 0 && aiResults.length === 0) {
     return (
-      <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 12, textAlign: 'center' }}>
+      <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 13, textAlign: 'center' }}>
         No annotations yet
       </div>
     );
@@ -691,19 +784,19 @@ function LayersList() {
       {aiResults.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px 4px' }}>
-            <span style={{ fontSize: 11, color: TEXT_SECONDARY, fontWeight: 500 }}>
+            <span style={{ fontSize: 12, color: TEXT_SECONDARY, fontWeight: 500 }}>
               AI Suggestions ({aiResults.length})
             </span>
             <div style={{ display: 'flex', gap: 4 }}>
               <button
                 onClick={handleAcceptAll}
-                style={{ fontSize: 10, padding: '2px 8px', background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 4, color: '#27ae60', cursor: 'pointer', fontWeight: 500 }}
+                style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 4, color: '#27ae60', cursor: 'pointer', fontWeight: 500 }}
               >
                 Accept All
               </button>
               <button
                 onClick={handleRejectAll}
-                style={{ fontSize: 10, padding: '2px 8px', background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.2)', borderRadius: 4, color: '#e74c3c', cursor: 'pointer', fontWeight: 500 }}
+                style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.2)', borderRadius: 4, color: '#e74c3c', cursor: 'pointer', fontWeight: 500 }}
               >
                 Reject All
               </button>
@@ -716,17 +809,17 @@ function LayersList() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                padding: '6px 16px',
+                padding: '7px 16px',
                 background: 'rgba(108, 92, 231, 0.04)',
                 borderLeft: '3px solid rgba(108, 92, 231, 0.3)',
                 borderBottom: '1px solid #f5f5f5',
               }}
             >
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6C5CE7', flexShrink: 0, opacity: 0.6 }} />
-              <span style={{ fontSize: 12, color: TEXT_SECONDARY, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#6C5CE7', flexShrink: 0, opacity: 0.6 }} />
+              <span style={{ fontSize: 13, color: TEXT_SECONDARY, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {result.label || 'unlabeled'}
               </span>
-              <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: ACCENT_BG, color: ACCENT, fontWeight: 600, flexShrink: 0 }}>AI</span>
+              <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 3, background: ACCENT_BG, color: ACCENT, fontWeight: 600, flexShrink: 0 }}>AI</span>
               <button
                 onClick={() => acceptAiResult(result, index)}
                 title="Accept"
@@ -752,6 +845,7 @@ function LayersList() {
       {/* Confirmed annotations */}
       {annotations.map((ann) => {
         const isSelected = selectedAnnotation?.id === ann.id;
+        const isEditing = editingLabelId === ann.id;
         return (
           <div
             key={ann.id}
@@ -759,12 +853,13 @@ function LayersList() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              padding: '7px 16px',
+              gap: 12,
+              padding: '8px 16px',
               cursor: 'pointer',
               background: isSelected ? ACCENT_BG : 'transparent',
               borderLeft: isSelected ? `3px solid ${ACCENT}` : '3px solid transparent',
               transition: 'background 0.1s',
+              position: 'relative',
             }}
             onMouseEnter={(e) => {
               if (!isSelected) e.currentTarget.style.background = '#f8f8f8';
@@ -775,26 +870,99 @@ function LayersList() {
           >
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 10,
+                height: 10,
                 borderRadius: '50%',
                 background: getLabelColor(ann.label),
                 flexShrink: 0,
               }}
             />
+            {/* Label name — click to open class picker */}
             <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingLabelId(isEditing ? null : ann.id);
+              }}
+              title="Click to reassign class"
               style={{
-                fontSize: 13,
+                fontSize: 14,
                 color: isSelected ? ACCENT : TEXT_PRIMARY,
                 fontWeight: isSelected ? 600 : 400,
                 flex: 1,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                cursor: 'pointer',
+                borderRadius: 4,
+                padding: '1px 4px',
+                margin: '-1px -4px',
+                transition: 'background 0.1s',
+                background: isEditing ? '#f0f0f0' : 'transparent',
               }}
+              onMouseEnter={(e) => { if (!isEditing) e.currentTarget.style.background = '#eef2ff'; }}
+              onMouseLeave={(e) => { if (!isEditing) e.currentTarget.style.background = 'transparent'; }}
             >
               {ann.label || 'unlabeled'}
+              <span style={{ fontSize: 9, marginLeft: 3, color: TEXT_MUTED, verticalAlign: 'middle' }}>▾</span>
             </span>
+
+            {/* Class picker dropdown */}
+            {isEditing && (
+              <div
+                ref={dropdownRef}
+                style={{
+                  position: 'absolute',
+                  left: 28,
+                  top: '100%',
+                  zIndex: 50,
+                  background: '#fff',
+                  border: '1px solid #e5e5e5',
+                  borderRadius: 6,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  minWidth: 160,
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                  padding: '4px 0',
+                }}
+              >
+                {labelClasses.map((lc) => (
+                  <div
+                    key={lc.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRelabel(ann, lc.name);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '7px 12px',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      color: ann.label === lc.name ? ACCENT : TEXT_PRIMARY,
+                      fontWeight: ann.label === lc.name ? 600 : 400,
+                      background: ann.label === lc.name ? ACCENT_BG : 'transparent',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (ann.label !== lc.name) e.currentTarget.style.background = '#f8f8f8';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (ann.label !== lc.name) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: lc.color || '#888', flexShrink: 0 }} />
+                    {lc.name}
+                  </div>
+                ))}
+                {labelClasses.length === 0 && (
+                  <div style={{ padding: '8px 12px', fontSize: 12, color: TEXT_MUTED }}>
+                    No classes defined
+                  </div>
+                )}
+              </div>
+            )}
+
             <TypeBadge type={ann.type} />
             <button
               onClick={(e) => {
@@ -839,22 +1007,22 @@ function LayersPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 16px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: TEXT_PRIMARY }}>Layers</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: TEXT_PRIMARY }}>Layers</span>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               color: ACCENT,
               background: ACCENT_BG,
-              padding: '1px 8px',
+              padding: '3px 10px',
               borderRadius: 10,
             }}
           >
             {annotations.length + aiResults.length}
           </span>
         </div>
-        <div style={{ fontSize: 11, color: TEXT_SECONDARY, marginTop: 2 }}>
+        <div style={{ fontSize: 14, color: TEXT_SECONDARY, marginTop: 4 }}>
           Individual annotations for current image
         </div>
       </div>
@@ -905,15 +1073,15 @@ function ImagesPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 16px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: TEXT_PRIMARY }}>Images</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: TEXT_PRIMARY }}>Images</span>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               color: ACCENT,
               background: ACCENT_BG,
-              padding: '1px 8px',
+              padding: '3px 10px',
               borderRadius: 10,
             }}
           >
@@ -935,13 +1103,13 @@ function ImagesPanel() {
           onClick={() => fileInputRef.current?.click()}
           style={{
             width: '100%',
-            padding: '8px',
+            padding: '10px',
             background: 'transparent',
             border: `1.5px dashed ${ACCENT}`,
-            borderRadius: 6,
+            borderRadius: 8,
             color: ACCENT,
             cursor: 'pointer',
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 500,
             transition: 'background 0.15s',
           }}
@@ -954,7 +1122,7 @@ function ImagesPanel() {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {images.length === 0 && (
-          <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 12, textAlign: 'center' }}>
+          <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 13, textAlign: 'center' }}>
             No images uploaded yet
           </div>
         )}
@@ -984,8 +1152,8 @@ function ImagesPanel() {
             >
               <div
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   borderRadius: 6,
                   background: '#f0f0f0',
                   overflow: 'hidden',
@@ -1005,7 +1173,7 @@ function ImagesPanel() {
               <div style={{ flex: 1, overflow: 'hidden' }}>
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     color: isCurrent ? ACCENT : TEXT_PRIMARY,
                     fontWeight: isCurrent ? 600 : 400,
                     overflow: 'hidden',
@@ -1016,7 +1184,7 @@ function ImagesPanel() {
                   {img.filename || `Image ${img.id}`}
                 </div>
                 {img.annotation_count != null && (
-                  <div style={{ fontSize: 11, color: TEXT_SECONDARY }}>
+                  <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>
                     {img.annotation_count} annotation{img.annotation_count !== 1 ? 's' : ''}
                   </div>
                 )}
@@ -1024,10 +1192,10 @@ function ImagesPanel() {
               {img.annotation_count != null && img.annotation_count > 0 && (
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     background: ACCENT_BG,
                     color: ACCENT,
-                    padding: '1px 8px',
+                    padding: '2px 8px',
                     borderRadius: 10,
                     fontWeight: 600,
                   }}
@@ -1109,20 +1277,20 @@ function ReviewTabPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 16px 12px' }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: TEXT_PRIMARY }}>AI Review</span>
-        <div style={{ fontSize: 11, color: TEXT_SECONDARY, marginTop: 2 }}>
+        <span style={{ fontSize: 17, fontWeight: 700, color: TEXT_PRIMARY }}>AI Review</span>
+        <div style={{ fontSize: 14, color: TEXT_SECONDARY, marginTop: 4 }}>
           Check annotation quality with AI
         </div>
       </div>
 
-      <div style={{ padding: '0 16px 12px' }}>
+      <div style={{ padding: '0 16px 10px' }}>
         <button
           onClick={handleRunReview}
           disabled={loading || !currentImage}
           style={{
             width: '100%',
             padding: '10px',
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 600,
             background: loading ? '#f0f0f0' : ACCENT,
             color: loading ? TEXT_SECONDARY : '#fff',
@@ -1147,7 +1315,7 @@ function ReviewTabPanel() {
               border: '1px solid rgba(231,76,60,0.2)',
               borderRadius: 6,
               color: '#e74c3c',
-              fontSize: 12,
+              fontSize: 13,
             }}
           >
             {error}
@@ -1155,13 +1323,13 @@ function ReviewTabPanel() {
         )}
 
         {!currentImage && (
-          <div style={{ textAlign: 'center', color: TEXT_MUTED, padding: '32px 16px', fontSize: 12 }}>
+          <div style={{ textAlign: 'center', color: TEXT_MUTED, padding: '32px 16px', fontSize: 13 }}>
             Select an image to run quality review
           </div>
         )}
 
         {currentImage && sortedIssues.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', color: TEXT_MUTED, padding: '32px 16px', fontSize: 12 }}>
+          <div style={{ textAlign: 'center', color: TEXT_MUTED, padding: '32px 16px', fontSize: 13 }}>
             {reviewIssues.length === 0
               ? 'Click "Run Quality Review" to check annotations'
               : 'All issues resolved'}
@@ -1169,7 +1337,7 @@ function ReviewTabPanel() {
         )}
 
         {loading && sortedIssues.length === 0 && (
-          <div style={{ textAlign: 'center', color: TEXT_SECONDARY, padding: '32px 16px', fontSize: 12 }}>
+          <div style={{ textAlign: 'center', color: TEXT_SECONDARY, padding: '32px 16px', fontSize: 13 }}>
             Analyzing annotations...
           </div>
         )}
@@ -1188,11 +1356,11 @@ function ReviewTabPanel() {
                 borderLeft: `3px solid ${color}`,
               }}
             >
-              <div style={{ fontSize: 12, color: TEXT_PRIMARY, marginBottom: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 13, color: TEXT_PRIMARY, marginBottom: 4, lineHeight: 1.4 }}>
                 {issue.message}
               </div>
               {issue.suggestion && (
-                <div style={{ fontSize: 11, color: TEXT_SECONDARY, marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: TEXT_SECONDARY, marginBottom: 8 }}>
                   {issue.suggestion}
                 </div>
               )}
@@ -1201,13 +1369,13 @@ function ReviewTabPanel() {
                   <button
                     onClick={() => handleAcceptFix(issue, idx)}
                     style={{
-                      padding: '4px 10px',
+                      padding: '5px 10px',
                       background: 'rgba(46,204,113,0.08)',
                       border: '1px solid rgba(46,204,113,0.3)',
                       borderRadius: 4,
                       color: '#27ae60',
                       cursor: 'pointer',
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 500,
                     }}
                   >
@@ -1217,13 +1385,13 @@ function ReviewTabPanel() {
                 <button
                   onClick={() => handleDismiss(idx)}
                   style={{
-                    padding: '4px 10px',
+                    padding: '5px 10px',
                     background: '#f0f0f0',
                     border: '1px solid #e5e5e5',
                     borderRadius: 4,
                     color: TEXT_SECONDARY,
                     cursor: 'pointer',
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 500,
                   }}
                 >
@@ -1233,13 +1401,13 @@ function ReviewTabPanel() {
                   <button
                     onClick={() => handleView(issue)}
                     style={{
-                      padding: '4px 10px',
+                      padding: '5px 10px',
                       background: ACCENT_BG,
                       border: `1px solid rgba(108,92,231,0.3)`,
                       borderRadius: 4,
                       color: ACCENT,
                       cursor: 'pointer',
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 500,
                     }}
                   >
@@ -1267,18 +1435,19 @@ export default function Sidebar() {
         flexDirection: 'row',
         flexShrink: 0,
         height: '100%',
+        borderRight: `1px solid ${BORDER}`,
       }}
     >
-      {/* Part A: Icon Tab Bar (56px) */}
+      {/* Part A: Icon Tab Bar */}
       <div
         style={{
-          width: 56,
-          background: '#fafafa',
-          borderRight: `1px solid ${BORDER}`,
+          width: 72,
+          background: '#fff',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          paddingTop: 8,
+          paddingTop: 10,
+          gap: 4,
           flexShrink: 0,
           userSelect: 'none',
         }}
@@ -1289,39 +1458,44 @@ export default function Sidebar() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              title={tab.label}
               style={{
-                width: 56,
-                height: 56,
+                width: 68,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 3,
-                background: isActive ? '#fff' : 'transparent',
-                color: isActive ? ACCENT : TEXT_SECONDARY,
+                gap: 5,
+                padding: '10px 0 8px',
+                background: 'transparent',
+                color: isActive ? ACCENT : '#999',
                 border: 'none',
                 borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
-                borderRight: 'none',
+                borderRadius: 0,
                 cursor: 'pointer',
-                transition: 'background 0.15s, color 0.15s',
-                padding: 0,
+                transition: 'color 0.15s',
               }}
               onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = '#f0f0f0';
-                  e.currentTarget.style.color = '#555';
-                }
+                if (!isActive) e.currentTarget.style.color = '#555';
               }}
               onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = TEXT_SECONDARY;
-                }
+                if (!isActive) e.currentTarget.style.color = '#999';
               }}
             >
-              <tab.Icon />
-              <span style={{ fontSize: 9, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 10,
+                  background: isActive ? 'rgba(108, 92, 231, 0.08)' : 'transparent',
+                  transition: 'background 0.15s',
+                }}
+              >
+                <tab.Icon />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>
                 {tab.label}
               </span>
             </button>
@@ -1329,15 +1503,14 @@ export default function Sidebar() {
         })}
       </div>
 
-      {/* Part B: Content Panel (280px) */}
+      {/* Part B: Content Panel */}
       <div
         style={{
-          width: 280,
+          width: 260,
           background: '#fff',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          borderRight: `1px solid ${BORDER}`,
         }}
       >
         {activeTab === 'labels' && <LabelsPanel />}

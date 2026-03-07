@@ -1,16 +1,16 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useStore } from '../store';
 import * as api from '../api';
 
 // ── Icon Components ──────────────────────────────────────────────────────────
 
 const iconProps = {
-  width: 20,
-  height: 20,
+  width: 33,
+  height: 33,
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 1.8,
+  strokeWidth: 1.6,
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
 };
@@ -94,17 +94,15 @@ function RedoIcon() {
 function DeleteIcon() {
   return (
     <svg {...iconProps}>
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-      <path d="M10 11v6M14 11v6" />
-      <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+      <circle cx="12" cy="12" r="9" />
+      <line x1="8" y1="8" x2="16" y2="16" />
     </svg>
   );
 }
 
 function SpinnerIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg width="33" height="33" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M12 2a10 10 0 0 1 10 10">
         <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite" />
       </path>
@@ -112,48 +110,165 @@ function SpinnerIcon() {
   );
 }
 
+// ── Tooltip metadata ─────────────────────────────────────────────────────────
+
+const TOOL_INFO = {
+  'select': {
+    name: 'Select Tool',
+    shortcut: 'V',
+    description: 'Pan the image or select / reposition annotations.',
+    color: '#6C5CE7',
+  },
+  'polygon': {
+    name: 'Polygon Tool',
+    shortcut: 'P',
+    description: 'Draw polygon annotations by clicking vertices. Close by clicking the first point.',
+    color: '#00b894',
+  },
+  'bbox': {
+    name: 'Bounding Box',
+    shortcut: 'R',
+    description: 'Click and drag to draw rectangular bounding box annotations.',
+    color: '#0984e3',
+  },
+  'click-segment': {
+    name: 'Click Segment',
+    shortcut: 'C',
+    description: 'Click on an object to segment it with AI. Right-click to add negative points.',
+    color: '#e17055',
+  },
+  'box-segment': {
+    name: 'Box Segment',
+    shortcut: 'B',
+    description: 'Draw a box around an object and AI will generate a precise segmentation mask.',
+    color: '#fdcb6e',
+  },
+  '__segment_everything': {
+    name: 'Segment Everything',
+    shortcut: 'E',
+    description: 'Automatically detect and segment all objects in the image using MobileSAM.',
+    color: '#a29bfe',
+  },
+  '__chat': {
+    name: 'Chat / NL Annotate',
+    shortcut: 'T',
+    description: 'Use natural language to describe what to annotate. AI will find and label objects.',
+    color: '#55efc4',
+  },
+  '__undo': {
+    name: 'Undo',
+    shortcut: null,
+    description: 'Undo the last annotation action.',
+    color: '#74b9ff',
+  },
+  '__redo': {
+    name: 'Redo',
+    shortcut: null,
+    description: 'Redo the previously undone action.',
+    color: '#74b9ff',
+  },
+  '__delete': {
+    name: 'Delete',
+    shortcut: 'Del',
+    description: 'Delete the currently selected annotation.',
+    color: '#ff7675',
+  },
+};
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const ACCENT = '#6C5CE7';
-const ACCENT_BG = 'rgba(108, 92, 231, 0.10)';
 
-const toolbarStyle = {
-  width: 48,
-  background: '#fff',
-  borderLeft: '1px solid #e5e5e5',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  paddingTop: 8,
-  paddingBottom: 8,
-  userSelect: 'none',
-  flexShrink: 0,
-  zIndex: 10,
-};
+// ── Tooltip Card ─────────────────────────────────────────────────────────────
 
-const dividerStyle = {
-  width: 28,
-  height: 1,
-  background: '#e5e5e5',
-  margin: '6px 0',
-};
+function ToolTooltip({ toolId, btnRect, containerRect }) {
+  const info = TOOL_INFO[toolId];
+  if (!info) return null;
 
-function btnStyle(isActive) {
-  return {
-    width: 36,
-    height: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: isActive ? ACCENT_BG : 'transparent',
-    color: isActive ? ACCENT : '#666',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    marginBottom: 2,
-    transition: 'background 0.15s, color 0.15s',
-    padding: 0,
-  };
+  // Position the tooltip to the left of the button, vertically centered
+  const top = btnRect.top - containerRect.top + btnRect.height / 2;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: '100%',
+        top: top,
+        transform: 'translateY(-50%)',
+        marginRight: 18,
+        width: 360,
+        background: '#fff',
+        borderRadius: 18,
+        boxShadow: '0 6px 36px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.08)',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: 100,
+        animation: 'tooltipFadeIn 0.15s ease-out',
+      }}
+    >
+      {/* Placeholder image */}
+      <div
+        style={{
+          width: '100%',
+          height: 180,
+          background: `linear-gradient(135deg, ${info.color}22, ${info.color}44)`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
+        <div
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: 18,
+            background: info.color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            boxShadow: `0 3px 12px ${info.color}55`,
+          }}
+        >
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Text content */}
+      <div style={{ padding: '18px 21px 21px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 9 }}>
+          <span style={{ fontSize: 21, fontWeight: 700, color: '#1a1a1a' }}>
+            {info.name}
+          </span>
+          {info.shortcut && (
+            <span
+              style={{
+                fontSize: 16,
+                fontWeight: 600,
+                color: '#555',
+                background: '#f0f0f0',
+                border: '1px solid #e0e0e0',
+                borderRadius: 6,
+                padding: '2px 9px',
+                lineHeight: '24px',
+                fontFamily: 'monospace',
+              }}
+            >
+              {info.shortcut}
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 18, color: '#666', lineHeight: 1.45 }}>
+          {info.description}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -182,6 +297,10 @@ export default function Toolbar({ onToggleChat }) {
 
   const [chatOpen, setChatOpen] = useState(false);
   const [prevTool, setPrevTool] = useState(null);
+  const [hoveredTool, setHoveredTool] = useState(null);
+  const [hoveredRect, setHoveredRect] = useState(null);
+  const hoverTimerRef = useRef(null);
+  const containerRef = useRef(null);
 
   // ── Segment Everything ─────────────────────────────────────────────────
 
@@ -241,7 +360,6 @@ export default function Toolbar({ onToggleChat }) {
         return;
       }
 
-      // Space for temporary pan
       if (e.key === ' ') {
         e.preventDefault();
         if (!prevTool) {
@@ -251,37 +369,15 @@ export default function Toolbar({ onToggleChat }) {
         return;
       }
 
-      // E for segment everything
-      if (e.key.toLowerCase() === 'e') {
-        handleSegmentEverything();
-        return;
-      }
+      if (e.key.toLowerCase() === 'e') { handleSegmentEverything(); return; }
+      if (e.key.toLowerCase() === 't') { handleToggleChat(); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace') { handleDelete(); return; }
 
-      // T for chat toggle
-      if (e.key.toLowerCase() === 't') {
-        handleToggleChat();
-        return;
-      }
-
-      // Delete / Backspace for delete selected
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        handleDelete();
-        return;
-      }
-
-      // Drawing tools
       const drawTool = drawingTools.find((t) => t.key === e.key.toLowerCase());
-      if (drawTool) {
-        setActiveTool(drawTool.id);
-        return;
-      }
+      if (drawTool) { setActiveTool(drawTool.id); return; }
 
-      // AI tools
       const aiTool = aiTools.find((t) => t.key === e.key.toLowerCase());
-      if (aiTool) {
-        setActiveTool(aiTool.id);
-        return;
-      }
+      if (aiTool) { setActiveTool(aiTool.id); return; }
     }
 
     function handleKeyUp(e) {
@@ -299,144 +395,192 @@ export default function Toolbar({ onToggleChat }) {
     };
   }, [activeTool, prevTool, setActiveTool, handleSegmentEverything, handleToggleChat, handleDelete]);
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  // ── Hover handlers ─────────────────────────────────────────────────────
 
-  return (
-    <div style={toolbarStyle}>
-      {/* Drawing tools */}
-      {drawingTools.map((tool) => (
-        <button
-          key={tool.id}
-          title={tool.title}
-          onClick={() => setActiveTool(tool.id)}
-          style={btnStyle(activeTool === tool.id)}
-          onMouseEnter={(e) => {
-            if (activeTool !== tool.id) e.currentTarget.style.background = '#f0f0f0';
-          }}
-          onMouseLeave={(e) => {
-            if (activeTool !== tool.id) e.currentTarget.style.background = 'transparent';
-          }}
-        >
-          <tool.Icon />
-        </button>
-      ))}
+  const handleBtnMouseEnter = useCallback((toolId, e) => {
+    clearTimeout(hoverTimerRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    hoverTimerRef.current = setTimeout(() => {
+      setHoveredRect(rect);
+      setHoveredTool(toolId);
+    }, 400);
+  }, []);
 
-      <div style={dividerStyle} />
+  const handleBtnMouseLeave = useCallback(() => {
+    clearTimeout(hoverTimerRef.current);
+    setHoveredTool(null);
+    setHoveredRect(null);
+  }, []);
 
-      {/* AI tools */}
-      {aiTools.map((tool) => (
-        <button
-          key={tool.id}
-          title={tool.title}
-          onClick={() => setActiveTool(tool.id)}
-          style={btnStyle(activeTool === tool.id)}
-          onMouseEnter={(e) => {
-            if (activeTool !== tool.id) e.currentTarget.style.background = '#f0f0f0';
-          }}
-          onMouseLeave={(e) => {
-            if (activeTool !== tool.id) e.currentTarget.style.background = 'transparent';
-          }}
-        >
-          <tool.Icon />
-        </button>
-      ))}
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(hoverTimerRef.current);
+  }, []);
 
-      {/* Segment Everything - special action button */}
+  // ── Button renderer ───────────────────────────────────────────────────
+
+  function ToolButton({ id, title, Icon, onClick, isActive, disabled, style: extraStyle }) {
+    const active = isActive ?? (activeTool === id);
+    return (
       <button
-        title="Segment Everything (E)"
-        onClick={handleSegmentEverything}
-        disabled={!currentImage || isAiProcessing}
+        onClick={onClick ?? (() => setActiveTool(id))}
+        disabled={disabled}
+        onMouseEnter={(e) => {
+          handleBtnMouseEnter(id, e);
+          if (!active && !disabled) {
+            e.currentTarget.style.background = '#f0f0f0';
+            e.currentTarget.style.color = '#333';
+          }
+        }}
+        onMouseLeave={(e) => {
+          handleBtnMouseLeave();
+          if (!active && !disabled) {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = '#555';
+          }
+        }}
         style={{
-          width: 36,
-          height: 36,
+          width: 63,
+          height: 63,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: isAiProcessing ? ACCENT_BG : 'transparent',
-          color: !currentImage ? '#ccc' : ACCENT,
-          border: `1.5px solid ${!currentImage ? '#e5e5e5' : ACCENT}`,
-          borderRadius: 8,
-          cursor: !currentImage || isAiProcessing ? 'default' : 'pointer',
-          marginBottom: 2,
+          background: active ? ACCENT : 'transparent',
+          color: active ? '#fff' : '#555',
+          border: 'none',
+          borderRadius: 15,
+          cursor: disabled ? 'default' : 'pointer',
           padding: 0,
-          transition: 'background 0.15s, border-color 0.15s',
-          opacity: !currentImage ? 0.4 : 1,
-        }}
-        onMouseEnter={(e) => {
-          if (currentImage && !isAiProcessing) {
-            e.currentTarget.style.background = ACCENT_BG;
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isAiProcessing) {
-            e.currentTarget.style.background = 'transparent';
-          }
+          transition: 'background 0.15s, color 0.15s, box-shadow 0.15s',
+          boxShadow: active ? '0 3px 12px rgba(108, 92, 231, 0.35)' : 'none',
+          opacity: disabled ? 0.35 : 1,
+          ...extraStyle,
         }}
       >
-        {isAiProcessing ? <SpinnerIcon /> : <SparkleIcon />}
+        <Icon />
       </button>
+    );
+  }
 
-      <div style={dividerStyle} />
+  // ── Render ─────────────────────────────────────────────────────────────
 
-      {/* Chat toggle */}
-      <button
-        title="Chat / NL Annotate (T)"
-        onClick={handleToggleChat}
-        style={btnStyle(chatOpen)}
-        onMouseEnter={(e) => {
-          if (!chatOpen) e.currentTarget.style.background = '#f0f0f0';
-        }}
-        onMouseLeave={(e) => {
-          if (!chatOpen) e.currentTarget.style.background = 'transparent';
-        }}
-      >
-        <ChatIcon />
-      </button>
+  const divider = (
+    <div
+      style={{
+        width: 39,
+        height: 2,
+        background: '#e5e5e5',
+        margin: '6px auto',
+        flexShrink: 0,
+      }}
+    />
+  );
 
-      {/* Undo */}
-      <button
-        title="Undo"
-        onClick={() => {/* undo not yet implemented */}}
-        style={btnStyle(false)}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f0f0'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-      >
-        <UndoIcon />
-      </button>
+  return (
+    <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center', zIndex: 10, pointerEvents: 'none' }}>
+      {/* Inject tooltip fade-in animation */}
+      <style>{`
+        @keyframes tooltipFadeIn {
+          from { opacity: 0; transform: translateY(-50%) translateX(6px); }
+          to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+        }
+      `}</style>
 
-      {/* Redo */}
-      <button
-        title="Redo"
-        onClick={() => {/* redo not yet implemented */}}
-        style={btnStyle(false)}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f0f0'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-      >
-        <RedoIcon />
-      </button>
-
-      <div style={dividerStyle} />
-
-      {/* Delete */}
-      <button
-        title="Delete Selected (Del)"
-        onClick={handleDelete}
-        disabled={!selectedAnnotation}
+      <div
+        ref={containerRef}
         style={{
-          ...btnStyle(false),
-          color: selectedAnnotation ? '#e74c3c' : '#ccc',
-          opacity: selectedAnnotation ? 1 : 0.4,
-          cursor: selectedAnnotation ? 'pointer' : 'default',
-        }}
-        onMouseEnter={(e) => {
-          if (selectedAnnotation) e.currentTarget.style.background = 'rgba(231, 76, 60, 0.08)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: 81,
+          background: '#fff',
+          borderRadius: 24,
+          boxShadow: '0 3px 24px rgba(0,0,0,0.10)',
+          padding: '9px',
+          userSelect: 'none',
+          flexShrink: 0,
+          zIndex: 10,
+          marginRight: 18,
+          gap: 3,
+          position: 'relative',
+          pointerEvents: 'auto',
         }}
       >
-        <DeleteIcon />
-      </button>
+        {/* Tooltip */}
+        {hoveredTool && hoveredRect && containerRef.current && (
+          <ToolTooltip
+            toolId={hoveredTool}
+            btnRect={hoveredRect}
+            containerRect={containerRef.current.getBoundingClientRect()}
+          />
+        )}
+
+        {/* Drawing tools */}
+        {drawingTools.map((tool) => (
+          <ToolButton key={tool.id} id={tool.id} title={tool.title} Icon={tool.Icon} />
+        ))}
+
+        {divider}
+
+        {/* AI tools */}
+        {aiTools.map((tool) => (
+          <ToolButton key={tool.id} id={tool.id} title={tool.title} Icon={tool.Icon} />
+        ))}
+
+        {/* Segment Everything */}
+        <ToolButton
+          id="__segment_everything"
+          title="Segment Everything (E)"
+          Icon={isAiProcessing ? SpinnerIcon : SparkleIcon}
+          onClick={handleSegmentEverything}
+          isActive={false}
+          disabled={!currentImage || isAiProcessing}
+        />
+
+        {divider}
+
+        {/* Chat toggle */}
+        <ToolButton
+          id="__chat"
+          title="Chat / NL Annotate (T)"
+          Icon={ChatIcon}
+          onClick={handleToggleChat}
+          isActive={chatOpen}
+        />
+
+        {/* Undo */}
+        <ToolButton
+          id="__undo"
+          title="Undo"
+          Icon={UndoIcon}
+          onClick={() => {/* undo not yet implemented */}}
+          isActive={false}
+        />
+
+        {/* Redo */}
+        <ToolButton
+          id="__redo"
+          title="Redo"
+          Icon={RedoIcon}
+          onClick={() => {/* redo not yet implemented */}}
+          isActive={false}
+        />
+
+        {divider}
+
+        {/* Delete */}
+        <ToolButton
+          id="__delete"
+          title="Delete Selected (Del)"
+          Icon={DeleteIcon}
+          onClick={handleDelete}
+          isActive={false}
+          disabled={!selectedAnnotation}
+          style={{
+            color: selectedAnnotation ? '#555' : '#ccc',
+          }}
+        />
+      </div>
     </div>
   );
 }
