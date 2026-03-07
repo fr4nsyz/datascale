@@ -38,13 +38,10 @@ export default function DeviceList() {
   if (loading) return <Status>Loading devices...</Status>;
   if (error) return <Status error>Error: {error}</Status>;
 
-  const online = devices.filter((d) => d.online).length;
-
   return (
     <div>
       <SectionHeader
         title={`Devices (${devices.length})`}
-        subtitle={`${online} online`}
         onRefresh={load}
       />
 
@@ -77,7 +74,6 @@ export default function DeviceList() {
                 flexShrink: 0,
               }}
             >
-              {d.online ? 'Online' : 'Offline'}
             </span>
             <button
               onClick={() => handleRemove(d.id, d.hostname)}
