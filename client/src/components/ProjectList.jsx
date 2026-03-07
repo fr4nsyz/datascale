@@ -3,20 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import * as api from '../api';
 
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '';
-  const now = new Date();
-  const diff = now - d;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return d.toLocaleDateString();
+function ExternalLinkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
 }
 
 export default function ProjectList() {
@@ -26,10 +20,11 @@ export default function ProjectList() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -51,10 +46,10 @@ export default function ProjectList() {
     setCreating(true);
     try {
       const project = await api.createProject(newName.trim(), newDescription.trim());
-      setProjects([...projects, project]);
+      setProjects([project, ...projects]);
       setNewName('');
       setNewDescription('');
-      setShowForm(false);
+      setShowModal(false);
       navigate(`/project/${project.id}`);
     } catch (err) {
       setError(err.message);
@@ -66,259 +61,634 @@ export default function ProjectList() {
   return (
     <div
       style={{
-        width: '100vw',
         minHeight: '100vh',
-        background: '#1e1e1e',
-        color: '#e0e0e0',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        background: '#ffffff',
+        color: '#1f2937',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
+        fontSize: 14,
       }}
     >
-      {/* Header */}
+      {/* Top navbar */}
       <div
         style={{
-          padding: '24px 32px',
-          borderBottom: '1px solid #3d3d3d',
+          height: 48,
+          background: '#ffffff',
+          borderBottom: '1px solid #e8e8e8',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          padding: '0 16px',
+          gap: 12,
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
         }}
       >
-        <div>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="4" fill="#f97316" />
+            <path d="M6 18L12 6l6 12H6z" fill="white" />
+          </svg>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1f2937' }}>dataTail</span>
+        </div>
+
+        {/* Hamburger */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#6b7280',
+            padding: '4px 6px',
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+
+        {/* Breadcrumb */}
+        <span style={{ fontSize: 14, color: '#1f2937' }}>Home</span>
+
+        <span style={{ flex: 1 }} />
+
+        {/* Right side items */}
+        <button
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#6b7280',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }} />
+          <span style={{ fontSize: 13, color: '#1f2937' }}>Light</span>
+        </div>
+
+        <div
+          style={{
+            padding: '2px 8px',
+            background: '#fef3c7',
+            borderRadius: 12,
+            fontSize: 11,
+            fontWeight: 600,
+            color: '#92400e',
+          }}
+        >
+          Beta
+        </div>
+
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: '#9ca3af',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 11,
+            fontWeight: 700,
+            color: '#ffffff',
+          }}
+        >
+          LU
+        </div>
+      </div>
+
+      {/* Left sidebar overlay */}
+      {sidebarOpen && (
+        <>
           <div
             style={{
-              fontSize: 24,
-              fontWeight: 800,
-              color: '#4a9eff',
-              letterSpacing: -0.5,
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.15)',
+              zIndex: 200,
+            }}
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 190,
+              background: '#ffffff',
+              borderRight: '1px solid #e8e8e8',
+              zIndex: 201,
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '2px 0 8px rgba(0,0,0,0.08)',
             }}
           >
-            dataTail
+            {/* Sidebar header */}
+            <div
+              style={{
+                height: 48,
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 12px',
+                gap: 8,
+                borderBottom: '1px solid #e8e8e8',
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <rect width="24" height="24" rx="4" fill="#f97316" />
+                <path d="M6 18L12 6l6 12H6z" fill="white" />
+              </svg>
+              <span style={{ fontWeight: 700, fontSize: 15, color: '#1f2937', flex: 1 }}>dataTail</span>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  padding: 4,
+                  display: 'flex',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <div style={{ flex: 1, padding: '8px 0' }}>
+              {[
+                {
+                  label: 'Home',
+                  active: true,
+                  icon: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                  ),
+                },
+                {
+                  label: 'Projects',
+                  active: false,
+                  icon: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+                    </svg>
+                  ),
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 14px',
+                    margin: '1px 6px',
+                    borderRadius: 6,
+                    background: item.active ? '#f3f4f6' : 'transparent',
+                    color: item.active ? '#1f2937' : '#6b7280',
+                    cursor: 'pointer',
+                    fontWeight: item.active ? 600 : 400,
+                    fontSize: 13,
+                  }}
+                >
+                  {item.icon}
+                  {item.label}
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom links */}
+            <div style={{ padding: '8px 0', borderTop: '1px solid #e8e8e8' }}>
+              {['API', 'Docs', 'GitHub'].map((link) => (
+                <div
+                  key={link}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '7px 14px',
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                  {link}
+                </div>
+              ))}
+              <div style={{ padding: '8px 14px', fontSize: 11, color: '#9ca3af' }}>v1.0.0</div>
+            </div>
           </div>
-          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
-            Annotation Projects
+        </>
+      )}
+
+      {/* Page body */}
+      <div style={{ padding: '28px 24px 40px', maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+          {/* Main column */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Welcome */}
+            <h1 style={{ fontSize: 30, fontWeight: 700, color: '#1f2937', margin: '0 0 4px 0', letterSpacing: -0.3 }}>
+              Welcome
+            </h1>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px 0' }}>
+              Let's get you started.
+            </p>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '8px 16px',
+                  background: '#ffffff',
+                  color: '#4f46e5',
+                  border: '1px solid #4f46e5',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+                  <line x1="12" y1="11" x2="12" y2="17" />
+                  <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
+                Create Project
+              </button>
+              <button
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '8px 16px',
+                  background: '#ffffff',
+                  color: '#4f46e5',
+                  border: '1px solid #4f46e5',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Import Dataset
+              </button>
+            </div>
+
+            {error && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 6,
+                  color: '#b91c1c',
+                  fontSize: 13,
+                  marginBottom: 16,
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            {/* Recent Projects card */}
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e8e8e8',
+                borderRadius: 8,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 18px',
+                  borderBottom: projects.length > 0 ? '1px solid #f3f4f6' : 'none',
+                }}
+              >
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#1f2937' }}>
+                  Recent Projects
+                </span>
+                <span
+                  onClick={() => setShowModal(true)}
+                  style={{ fontSize: 13, color: '#4f46e5', cursor: 'pointer', fontWeight: 500 }}
+                >
+                  New Project
+                </span>
+              </div>
+
+              {loading && (
+                <div style={{ padding: '24px 18px', color: '#9ca3af', fontSize: 13 }}>
+                  Loading projects...
+                </div>
+              )}
+
+              {!loading && projects.length === 0 && (
+                <div style={{ padding: '32px 18px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                  No projects yet.{' '}
+                  <span
+                    onClick={() => setShowModal(true)}
+                    style={{ color: '#4f46e5', cursor: 'pointer' }}
+                  >
+                    Create your first project
+                  </span>
+                </div>
+              )}
+
+              {!loading && projects.map((project, idx) => {
+                const pct = project.image_count > 0
+                  ? Math.round((project.annotation_count / project.image_count) * 100)
+                  : 0;
+                const isLast = idx === projects.length - 1;
+                return (
+                  <div
+                    key={project.id}
+                    onClick={() => navigate(`/project/${project.id}`)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '14px 18px',
+                      borderBottom: isLast ? 'none' : '1px solid #f3f4f6',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f9fafb'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {/* Left: name + progress text */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1f2937' }}>
+                        {project.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                        {project.annotation_count ?? 0} of {project.image_count ?? 0} Images annotated ({pct}%)
+                      </div>
+                    </div>
+
+                    {/* Right: progress bar */}
+                    <div
+                      style={{
+                        width: 120,
+                        height: 6,
+                        background: '#e5e7eb',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                        marginLeft: 16,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(pct, 100)}%`,
+                          height: '100%',
+                          background: pct > 0 ? '#0d9488' : 'transparent',
+                          borderRadius: 3,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right sidebar */}
+          <div style={{ width: 240, flexShrink: 0 }}>
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e8e8e8',
+                borderRadius: 8,
+                overflow: 'hidden',
+              }}
+            >
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid #f3f4f6' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#1f2937' }}>Resources</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                  Learn, explore and get help
+                </div>
+              </div>
+
+              {[
+                'Documentation',
+                'GitHub Repository',
+                'Release Notes',
+                'Tailscale Setup',
+                'MobileSAM Guide',
+              ].map((item) => (
+                <div
+                  key={item}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '11px 18px',
+                    borderBottom: '1px solid #f3f4f6',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    color: '#1f2937',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f9fafb'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {item}
+                  <ExternalLinkIcon />
+                </div>
+              ))}
+
+              <div
+                style={{
+                  padding: '12px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 12,
+                  color: '#6b7280',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <rect width="24" height="24" rx="4" fill="#f97316" />
+                  <path d="M6 18L12 6l6 12H6z" fill="white" />
+                </svg>
+                dataTail Version: Community
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ padding: '24px 32px', maxWidth: 1200, margin: '0 auto' }}>
-        {error && (
+      {/* Create Project Modal */}
+      {showModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowModal(false);
+              setNewName('');
+              setNewDescription('');
+            }
+          }}
+        >
           <div
             style={{
-              padding: '12px 16px',
-              background: '#ff4a4a22',
-              border: '1px solid #ff4a4a44',
-              borderRadius: 6,
-              color: '#ff4a4a',
-              fontSize: 13,
-              marginBottom: 16,
+              width: 420,
+              background: '#ffffff',
+              borderRadius: 10,
+              border: '1px solid #e8e8e8',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              overflow: 'hidden',
             }}
           >
-            {error}
-          </div>
-        )}
-
-        {loading && (
-          <div style={{ textAlign: 'center', color: '#888', padding: 40 }}>
-            Loading projects...
-          </div>
-        )}
-
-        {!loading && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 16,
-            }}
-          >
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                onClick={() => navigate(`/project/${project.id}`)}
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f3f4f6' }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#1f2937' }}>New Project</div>
+              <div style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
+                Create a new annotation project
+              </div>
+            </div>
+            <div style={{ padding: '18px 24px' }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
+                Project Name
+              </label>
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreate();
+                  if (e.key === 'Escape') { setShowModal(false); setNewName(''); setNewDescription(''); }
+                }}
+                placeholder="e.g. Street Signs Dataset"
                 style={{
-                  background: '#252525',
-                  border: '1px solid #3d3d3d',
-                  borderRadius: 10,
-                  padding: 20,
+                  width: '100%',
+                  padding: '9px 12px',
+                  background: '#ffffff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  color: '#1f2937',
+                  fontSize: 13,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  marginBottom: 14,
+                  transition: 'border-color 0.15s',
+                }}
+                onFocus={(e) => { e.target.style.borderColor = '#4f46e5'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; }}
+              />
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
+                Description <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span>
+              </label>
+              <textarea
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setShowModal(false); setNewName(''); setNewDescription(''); }
+                }}
+                placeholder="What will this dataset be used for?"
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  background: '#ffffff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  color: '#1f2937',
+                  fontSize: 13,
+                  outline: 'none',
+                  resize: 'none',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.15s',
+                }}
+                onFocus={(e) => { e.target.style.borderColor = '#4f46e5'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; }}
+              />
+            </div>
+            <div style={{ padding: '12px 24px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setShowModal(false); setNewName(''); setNewDescription(''); }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#ffffff',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
                   cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 140,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#4a9eff';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(74,158,255,0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#3d3d3d';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
+                  fontSize: 13,
+                  fontWeight: 500,
                 }}
               >
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#e0e0e0', marginBottom: 6 }}>
-                  {project.name}
-                </div>
-                {project.description && (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: '#888',
-                      marginBottom: 12,
-                      flex: 1,
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {project.description}
-                  </div>
-                )}
-                {!project.description && <div style={{ flex: 1 }} />}
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  {project.image_count != null && (
-                    <span style={{ fontSize: 11, color: '#888' }}>
-                      {project.image_count} image{project.image_count !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {project.annotation_count != null && (
-                    <span style={{ fontSize: 11, color: '#888' }}>
-                      {project.annotation_count} annotation{project.annotation_count !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                  <span style={{ flex: 1 }} />
-                  {(project.updated_at || project.created_at) && (
-                    <span style={{ fontSize: 11, color: '#666' }}>
-                      {formatDate(project.updated_at || project.created_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* New Project Card */}
-            {!showForm ? (
-              <div
-                onClick={() => setShowForm(true)}
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={!newName.trim() || creating}
                 style={{
-                  background: 'transparent',
-                  border: '2px dashed #3d3d3d',
-                  borderRadius: 10,
-                  padding: 20,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: 140,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#4a9eff';
-                  e.currentTarget.style.background = '#4a9eff08';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#3d3d3d';
-                  e.currentTarget.style.background = 'transparent';
+                  padding: '8px 20px',
+                  background: newName.trim() && !creating ? '#4f46e5' : '#e5e7eb',
+                  color: newName.trim() && !creating ? '#ffffff' : '#9ca3af',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: newName.trim() && !creating ? 'pointer' : 'default',
+                  fontSize: 13,
+                  fontWeight: 600,
                 }}
               >
-                <div style={{ fontSize: 32, color: '#555', marginBottom: 8, lineHeight: 1 }}>+</div>
-                <div style={{ fontSize: 14, color: '#888' }}>New Project</div>
-              </div>
-            ) : (
-              <div
-                style={{
-                  background: '#252525',
-                  border: '1px solid #4a9eff',
-                  borderRadius: 10,
-                  padding: 20,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                  minHeight: 140,
-                }}
-              >
-                <input
-                  autoFocus
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreate();
-                    if (e.key === 'Escape') setShowForm(false);
-                  }}
-                  placeholder="Project name"
-                  style={{
-                    padding: '8px 12px',
-                    background: '#1e1e1e',
-                    border: '1px solid #555',
-                    borderRadius: 6,
-                    color: '#e0e0e0',
-                    fontSize: 14,
-                    outline: 'none',
-                  }}
-                />
-                <textarea
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Description (optional)"
-                  rows={2}
-                  style={{
-                    padding: '8px 12px',
-                    background: '#1e1e1e',
-                    border: '1px solid #555',
-                    borderRadius: 6,
-                    color: '#e0e0e0',
-                    fontSize: 13,
-                    outline: 'none',
-                    resize: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                />
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={handleCreate}
-                    disabled={!newName.trim() || creating}
-                    style={{
-                      flex: 1,
-                      padding: '8px',
-                      background: newName.trim() && !creating ? '#4a9eff' : '#3d3d3d',
-                      color: newName.trim() && !creating ? '#fff' : '#666',
-                      border: 'none',
-                      borderRadius: 6,
-                      cursor: newName.trim() && !creating ? 'pointer' : 'default',
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {creating ? 'Creating...' : 'Create'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowForm(false);
-                      setNewName('');
-                      setNewDescription('');
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#3d3d3d',
-                      color: '#b0b0b0',
-                      border: 'none',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+                {creating ? 'Creating...' : 'Create Project'}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
