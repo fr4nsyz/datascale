@@ -12,6 +12,7 @@ import annotationsRouter from './routes/annotations.js';
 import labelsRouter from './routes/labels.js';
 import aiRouter from './routes/ai.js';
 import reviewsRouter from './routes/reviews.js';
+import tailnetRouter from './routes/tailnet.js';
 
 // Ensure db is initialized (tables created on import)
 import db from './db.js';
@@ -25,7 +26,11 @@ const PORT = process.env.PORT || 3000;
 // CORS — allow localhost origins
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    if (
+      !origin ||
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+      /^https:\/\/.*\.ts\.net(:\d+)?$/.test(origin)
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -33,6 +38,13 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+app.options('*', cors());
+
+app.use((req, res, next) => {
+  console.log("HEADERS:", req.headers);
+  next();
+});
 
 // Body parsing
 app.use(express.json({ limit: '50mb' }));
@@ -56,6 +68,7 @@ app.use('/api/annotations', annotationsRouter);
 app.use('/api/projects/:projectId/labels', labelsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reviews', reviewsRouter);
+app.use('/api/tailnet', tailnetRouter);
 
 // GET /api/images/:imageId — fetch single image by ID (project-agnostic)
 app.get('/api/images/:imageId', (req, res) => {
@@ -90,9 +103,31 @@ app.delete('/api/images/:imageId', (req, res) => {
   const image = db.prepare('SELECT * FROM images WHERE id = ?').get(req.params.imageId);
   if (!image) return res.status(404).json({ error: 'Image not found' });
   const filePath = path.join(__dirname, '..', 'uploads', image.project_id, image.filename);
-  try { fs.unlinkSync(filePath); } catch {}
+  try { fs.unlinkSync(filePath); } catch { }
   db.prepare('DELETE FROM images WHERE id = ?').run(req.params.imageId);
   res.json({ success: true });
+});
+
+// GET /api/me — current user identity + admin status
+const TAILNET_SERVICE_URL = process.env.TAILNET_SERVICE_URL || 'http://127.0.0.1:4000';
+
+app.get('/api/me', async (req, res) => {
+  const user = req.user;
+  let isAdmin = false;
+  let tailnetServiceAvailable = false;
+  try {
+    const r = await fetch(
+      `${TAILNET_SERVICE_URL}/internal/check-admin/${encodeURIComponent(user)}`
+    );
+    if (r.ok) {
+      const data = await r.json();
+      isAdmin = data.isAdmin === true;
+      tailnetServiceAvailable = true;
+    }
+  } catch {
+    // tailscale-admin service not running — fail closed
+  }
+  res.json({ user, isAdmin, tailnetServiceAvailable });
 });
 
 // Health check

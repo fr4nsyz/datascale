@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",        // <-- Important for require()
+    "outDir": "dist",
+    "esModuleInterop": true,     // <-- allows clean import/export interop
+    "strict": true
+  },
+  "include": ["src"]
+}

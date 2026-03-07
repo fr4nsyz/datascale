@@ -1,0 +1,19 @@
+{
+  "groups": {
+    "group:annotator": [],
+    "group:reviewer": [],
+    "group:admin": []
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "users": ["group:annotator", "group:reviewer", "group:admin"],
+      "ports": ["m4-host:3000"]
+    },
+    {
+      "action": "accept",
+      "users": ["group:admin"],
+      "ports": ["m4-host:8000"]
+    }
+  ]
+}
