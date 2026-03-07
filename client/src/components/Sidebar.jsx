@@ -2,6 +2,16 @@ import { useState, useRef, useMemo } from 'react';
 import { useStore } from '../store';
 import * as api from '../api';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function parseData(data) {
+  if (!data) return null;
+  if (typeof data === 'string') {
+    try { return JSON.parse(data); } catch { return null; }
+  }
+  return data;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ACCENT = '#6C5CE7';
@@ -120,6 +130,7 @@ function TypeBadge({ type }) {
 
 function LabelsPanel() {
   const annotations = useStore((s) => s.annotations);
+  const aiResults = useStore((s) => s.aiResults);
   const selectedAnnotation = useStore((s) => s.selectedAnnotation);
   const setSelectedAnnotation = useStore((s) => s.setSelectedAnnotation);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
@@ -228,7 +239,7 @@ function LabelsPanel() {
               borderRadius: 10,
             }}
           >
-            {annotations.length}
+            {annotations.length + aiResults.length}
           </span>
         </div>
         {activeLabel && (
@@ -588,6 +599,11 @@ function LabelsPanel() {
 
 function LayersList() {
   const annotations = useStore((s) => s.annotations);
+  const aiResults = useStore((s) => s.aiResults);
+  const setAiResults = useStore((s) => s.setAiResults);
+  const addAnnotation = useStore((s) => s.addAnnotation);
+  const currentImage = useStore((s) => s.currentImage);
+  const activeLabel = useStore((s) => s.activeLabel);
   const selectedAnnotation = useStore((s) => s.selectedAnnotation);
   const setSelectedAnnotation = useStore((s) => s.setSelectedAnnotation);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
@@ -610,7 +626,58 @@ function LayersList() {
     }
   }
 
-  if (annotations.length === 0) {
+  async function acceptAiResult(result, index) {
+    if (!currentImage?.id) return;
+    const polygon = parseData(result.data || result.polygon);
+    const newAnn = {
+      image_id: currentImage.id,
+      project_id: currentImage.project_id,
+      label: result.label || activeLabel?.name || null,
+      type: 'polygon',
+      data: polygon,
+      source: 'sam-auto',
+    };
+    try {
+      const saved = await api.createAnnotation(newAnn);
+      addAnnotation(saved);
+    } catch (err) {
+      console.error('Failed to save AI annotation:', err);
+      addAnnotation({ ...newAnn, id: 'temp-' + Date.now() });
+    }
+    setAiResults(aiResults.filter((_, i) => i !== index));
+  }
+
+  function rejectAiResult(index) {
+    setAiResults(aiResults.filter((_, i) => i !== index));
+  }
+
+  async function handleAcceptAll() {
+    if (!currentImage?.id) return;
+    for (const result of aiResults) {
+      const polygon = parseData(result.data || result.polygon);
+      const newAnn = {
+        image_id: currentImage.id,
+        project_id: currentImage.project_id,
+        label: result.label || activeLabel?.name || null,
+        type: 'polygon',
+        data: polygon,
+        source: 'sam-auto',
+      };
+      try {
+        const saved = await api.createAnnotation(newAnn);
+        addAnnotation(saved);
+      } catch (err) {
+        addAnnotation({ ...newAnn, id: 'temp-' + Date.now() });
+      }
+    }
+    setAiResults([]);
+  }
+
+  function handleRejectAll() {
+    setAiResults([]);
+  }
+
+  if (annotations.length === 0 && aiResults.length === 0) {
     return (
       <div style={{ padding: '24px 16px', color: TEXT_MUTED, fontSize: 12, textAlign: 'center' }}>
         No annotations yet
@@ -620,6 +687,69 @@ function LayersList() {
 
   return (
     <>
+      {/* AI suggestions section */}
+      {aiResults.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px 4px' }}>
+            <span style={{ fontSize: 11, color: TEXT_SECONDARY, fontWeight: 500 }}>
+              AI Suggestions ({aiResults.length})
+            </span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={handleAcceptAll}
+                style={{ fontSize: 10, padding: '2px 8px', background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 4, color: '#27ae60', cursor: 'pointer', fontWeight: 500 }}
+              >
+                Accept All
+              </button>
+              <button
+                onClick={handleRejectAll}
+                style={{ fontSize: 10, padding: '2px 8px', background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.2)', borderRadius: 4, color: '#e74c3c', cursor: 'pointer', fontWeight: 500 }}
+              >
+                Reject All
+              </button>
+            </div>
+          </div>
+          {aiResults.map((result, index) => (
+            <div
+              key={index}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 16px',
+                background: 'rgba(108, 92, 231, 0.04)',
+                borderLeft: '3px solid rgba(108, 92, 231, 0.3)',
+                borderBottom: '1px solid #f5f5f5',
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6C5CE7', flexShrink: 0, opacity: 0.6 }} />
+              <span style={{ fontSize: 12, color: TEXT_SECONDARY, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {result.label || 'unlabeled'}
+              </span>
+              <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: ACCENT_BG, color: ACCENT, fontWeight: 600, flexShrink: 0 }}>AI</span>
+              <button
+                onClick={() => acceptAiResult(result, index)}
+                title="Accept"
+                style={{ background: 'transparent', border: 'none', color: '#27ae60', cursor: 'pointer', padding: '2px 3px', fontSize: 14, lineHeight: 1, flexShrink: 0 }}
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => rejectAiResult(index)}
+                title="Reject"
+                style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: '2px 3px', fontSize: 14, lineHeight: 1, flexShrink: 0 }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {annotations.length > 0 && (
+            <div style={{ height: 6, borderBottom: '1px solid #eee', marginBottom: 2 }} />
+          )}
+        </>
+      )}
+
+      {/* Confirmed annotations */}
       {annotations.map((ann) => {
         const isSelected = selectedAnnotation?.id === ann.id;
         return (
@@ -704,6 +834,7 @@ function LayersList() {
 
 function LayersPanel() {
   const annotations = useStore((s) => s.annotations);
+  const aiResults = useStore((s) => s.aiResults);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -720,7 +851,7 @@ function LayersPanel() {
               borderRadius: 10,
             }}
           >
-            {annotations.length}
+            {annotations.length + aiResults.length}
           </span>
         </div>
         <div style={{ fontSize: 11, color: TEXT_SECONDARY, marginTop: 2 }}>
