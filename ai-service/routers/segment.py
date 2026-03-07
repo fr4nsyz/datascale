@@ -10,7 +10,7 @@ import torch
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from models import DEVICE, get_sam_model, get_sam_predictor
+from models import DEVICE, get_sam_model, get_sam_predictor, get_sam2_model, get_yolo_world_model
 from utils import (
     image_from_upload,
     mask_to_polygon,
@@ -153,76 +153,85 @@ async def segment_box(
 # POST /segment/everything
 # ---------------------------------------------------------------------------
 
+COCO_CLASSES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
+    "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
+    "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
+    "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
+    "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
+    "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
+    "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+    "hair drier", "toothbrush",
+]
+
+
 @router.post("/everything")
 async def segment_everything(
     image: UploadFile = File(...),
     points_per_side: int = Form(16),
 ):
-    """Run automatic mask generation over the entire image.
+    """Detect and segment all objects in the image using YOLO-World + SAM2.
 
     Returns a list of segments, each with ``area``, ``bbox``, ``stability_score``,
-    ``polygon``, and ``rle``.
+    ``polygon``, ``rle``, and ``label``.
     """
-    from segment_anything import SamAutomaticMaskGenerator, SamPredictor  # type: ignore
+    import tempfile, os
 
     pil_img, np_img = await image_from_upload(image)
+    img_h, img_w = np_img.shape[:2]
+    img_area = img_h * img_w
 
-    # SamAutomaticMaskGenerator internally uses float64 tensors which MPS
-    # doesn't support.  Move the model to CPU for this operation and create
-    # a fresh predictor so the predictor.device is also CPU.
-    sam_model = get_sam_model()
-    original_device = next(sam_model.parameters()).device
-    use_cpu = original_device.type == "mps"
-    if use_cpu:
-        sam_model.to("cpu")
+    yolo = get_yolo_world_model()
+    sam2 = get_sam2_model()
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        pil_img.save(f, format="JPEG")
+        tmp_path = f.name
 
     try:
-        img_h, img_w = np_img.shape[:2]
-        img_area = img_h * img_w
+        yolo.set_classes(COCO_CLASSES)
+        det_results = yolo.predict(tmp_path, conf=0.15, verbose=False)[0]
 
-        generator = SamAutomaticMaskGenerator(
-            model=sam_model,
-            points_per_side=points_per_side,
-            pred_iou_thresh=0.94,
-            stability_score_thresh=0.96,
-            min_mask_region_area=int(img_area * 0.02),
-            box_nms_thresh=0.4,
-            crop_n_layers=0,
-        )
-        # Override the internal predictor so its device is also CPU.
-        if use_cpu:
-            generator.predictor = SamPredictor(sam_model)
+        if len(det_results.boxes) == 0:
+            return []
 
-        masks_data: list[dict] = generator.generate(np_img)
-    finally:
-        if use_cpu:
-            sam_model.to(original_device)
+        bboxes = det_results.boxes.xyxy.cpu().numpy().tolist()
+        seg_results = sam2.predict(tmp_path, bboxes=bboxes, verbose=False)[0]
 
-    # Filter: drop masks smaller than 2% of the image area
-    min_area = max(500, img_area * 0.02)
+        results = []
+        for i, box in enumerate(det_results.boxes):
+            cls_idx = int(box.cls[0])
+            confidence = float(box.conf[0])
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            x, y, w, h = int(x1), int(y1), int(x2 - x1), int(y2 - y1)
+            area = w * h
 
-    results = []
-    for entry in masks_data:
-        if entry["area"] < min_area:
-            continue
-        binary = entry["segmentation"].astype(np.uint8)
-        polygon = mask_to_polygon(binary)
-        if len(polygon) < 3:
-            continue
-        results.append(
-            {
-                "area": int(entry["area"]),
-                "bbox": [int(v) for v in entry["bbox"]],  # [x, y, w, h]
-                "stability_score": float(entry["stability_score"]),
-                "predicted_iou": float(entry["predicted_iou"]),
+            if area < max(500, img_area * 0.01):
+                continue
+
+            binary = seg_results.masks.data[i].cpu().numpy().astype(np.uint8)
+            polygon = mask_to_polygon(binary)
+            if len(polygon) < 3:
+                continue
+
+            results.append({
+                "area": area,
+                "bbox": [x, y, w, h],
+                "stability_score": confidence,
+                "predicted_iou": confidence,
                 "polygon": polygon,
                 "rle": mask_to_rle(binary),
-            }
-        )
+                "label": yolo.names[cls_idx],
+            })
 
-    # Sort by area descending so the most prominent objects come first
-    results.sort(key=lambda r: r["area"], reverse=True)
-    return results
+        results.sort(key=lambda r: r["area"], reverse=True)
+        return results
+    finally:
+        os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------

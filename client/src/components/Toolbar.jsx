@@ -318,7 +318,7 @@ export default function Toolbar({ uiScale = 1, onToggleChat }) {
           area: seg.area,
           bbox: seg.bbox,
           rle: seg.rle,
-          label: null,
+          label: seg.label || null,
           source: 'sam-auto',
           type: 'polygon',
         }));

@@ -772,7 +772,6 @@ export default function ProjectList() {
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: TEXT_PRIMARY }}>Local User</div>
-            <div style={{ fontSize: 11, color: TEXT_MUTED, fontWeight: 500 }}>PRO PLAN</div>
           </div>
         </div>
       </aside>
