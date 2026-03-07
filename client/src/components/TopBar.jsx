@@ -513,6 +513,31 @@ export default function TopBar({
                 >
                   Back to Projects
                 </div>
+                <div
+                  onClick={async () => {
+                    setMoreOpen(false);
+                    if (!currentProject) return;
+                    if (!window.confirm(`Delete "${currentProject.name}"? This cannot be undone.`)) return;
+                    try {
+                      await api.deleteProject(currentProject.id);
+                      navigate('/');
+                    } catch (err) {
+                      console.error('Failed to delete project:', err);
+                    }
+                  }}
+                  style={{
+                    padding: '15px 24px',
+                    fontSize: 20,
+                    color: '#e74c3c',
+                    cursor: 'pointer',
+                    borderTop: '1px solid #f0f0f0',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#fdf0f0'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  Delete Project
+                </div>
               </div>
             </>
           )}

@@ -176,7 +176,6 @@ function ArrowRightIcon() {
 const NAV_ITEMS = [
   { id: 'projects', label: 'Projects', Icon: NavProjectsIcon },
   { id: 'datasets', label: 'Datasets', Icon: NavDatasetsIcon },
-  { id: 'modelhub', label: 'Model Hub', Icon: NavModelHubIcon },
   { id: 'team', label: 'Team', Icon: NavTeamIcon },
   { id: 'settings', label: 'Settings', Icon: NavSettingsIcon },
 ];
@@ -282,7 +281,7 @@ function ProjectCard({ project, onClick }) {
           gap: 16,
         }}
       >
-        {/* Thumbnail placeholder */}
+        {/* Thumbnail */}
         <div
           style={{
             width: 80,
@@ -296,11 +295,19 @@ function ProjectCard({ project, onClick }) {
             overflow: 'hidden',
           }}
         >
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.6">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
-          </svg>
+          {project.thumbnail_image_id ? (
+            <img
+              src={`/api/images/${project.thumbnail_image_id}/file`}
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.6">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -608,10 +615,11 @@ export default function ProjectList() {
     <div
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        height: '100vh',
         background: BG,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
         color: TEXT_PRIMARY,
+        overflow: 'hidden',
       }}
     >
       {/* ── Left Sidebar ────────────────────────────────────────── */}
@@ -775,7 +783,7 @@ export default function ProjectList() {
           flex: 1,
           marginLeft: 240,
           padding: '40px 48px 60px',
-          minHeight: '100vh',
+          height: '100vh',
           overflowY: 'auto',
         }}
       >
@@ -915,8 +923,8 @@ export default function ProjectList() {
 
         {/* Empty state */}
         {!loading && projects.length === 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
-            <NewDatasetCard onClick={() => setShowModal(true)} />
+          <div style={{ textAlign: 'center', padding: '60px 0', color: TEXT_MUTED, fontSize: 15 }}>
+            No projects yet. Click "New Project" to get started.
           </div>
         )}
 
@@ -930,7 +938,6 @@ export default function ProjectList() {
                 onClick={() => navigate(`/project/${project.id}`)}
               />
             ))}
-            <NewDatasetCard onClick={() => setShowModal(true)} />
           </div>
         )}
       </main>
