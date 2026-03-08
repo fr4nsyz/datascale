@@ -48,10 +48,7 @@ function LoadingScreen() {
       zIndex: 9999,
     }}>
       <div style={{ textAlign: 'center' }}>
-        <svg width="40" height="40" viewBox="0 0 36 36" fill="none" style={{ marginBottom: 16 }}>
-          <rect width="36" height="36" rx="10" fill="#6C5CE7" />
-          <path d="M18 8l-8 14h5v6l8-14h-5v-6z" fill="white" opacity="0.9" />
-        </svg>
+        <img src="/logo.png" alt="datascale" width="40" height="40" style={{ borderRadius: 10, marginBottom: 16 }} />
         <div style={{
           fontSize: 13,
           color: '#888',

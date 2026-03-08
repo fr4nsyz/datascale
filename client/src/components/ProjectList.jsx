@@ -18,10 +18,7 @@ const BG = '#f4f5f7';
 
 function LogoIcon() {
   return (
-    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-      <rect width="36" height="36" rx="10" fill={ACCENT} />
-      <path d="M18 8l-8 14h5v6l8-14h-5v-6z" fill="white" opacity="0.9" />
-    </svg>
+    <img src="/logo.png" alt="datascale" width="36" height="36" style={{ borderRadius: 8 }} />
   );
 }
 
@@ -792,7 +789,7 @@ export default function ProjectList() {
           }}
         >
           <LogoIcon />
-          <span style={{ fontSize: 20, fontWeight: 700, color: TEXT_PRIMARY }}>dataTail</span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: TEXT_PRIMARY }}>datascale</span>
         </div>
 
         {/* Nav items */}
