@@ -11,7 +11,7 @@ export const useStore = create((set, get) => ({
   images: [],
   currentImage: null,
   setImages: (images) => set({ images }),
-  setCurrentImage: (image) => set({ currentImage: image }),
+  setCurrentImage: (image) => set({ currentImage: image, reviewIssues: [] }),
   updateImage: (id, data) => set(s => ({
     images: s.images.map(img => img.id === id ? { ...img, ...data } : img),
     currentImage: s.currentImage?.id === id ? { ...s.currentImage, ...data } : s.currentImage,
