@@ -199,6 +199,30 @@ export async function datasetHealth(projectId) {
   });
 }
 
+// ── Export ────────────────────────────────────────────────
+
+export async function exportSummary(projectId) {
+  return request(`${API}/projects/${projectId}/export/summary`);
+}
+
+export async function exportDataset(projectId, format = 'coco', includeImages = false) {
+  const params = new URLSearchParams({ format, includeImages: String(includeImages) });
+  const res = await fetch(`${API}/projects/${projectId}/export?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = res.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || `export_${format}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Reviews ───────────────────────────────────────────────
 
 export async function fetchReviewIssues(projectId) {

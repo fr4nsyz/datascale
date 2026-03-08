@@ -10,6 +10,7 @@ import Sidebar from './Sidebar';
 import ChatPanel from './ChatPanel';
 import DashboardPanel from './DashboardPanel';
 import ReviewPanel from './ReviewPanel';
+import ExportPanel from './ExportPanel';
 import BottomBar from './BottomBar';
 
 export default function ProjectView() {
@@ -27,6 +28,7 @@ export default function ProjectView() {
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [annotationsVisible, setAnnotationsVisible] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -136,6 +138,7 @@ export default function ProjectView() {
         uiScale={uiScale}
         onOpenDashboard={() => setDashboardOpen(true)}
         onOpenReview={() => setReviewOpen(true)}
+        onOpenExport={() => setExportOpen(true)}
         annotationsVisible={annotationsVisible}
         onToggleAnnotationVisibility={() => setAnnotationsVisible((v) => !v)}
         onNavigateImage={(dir) => {
@@ -172,6 +175,11 @@ export default function ProjectView() {
       <ReviewPanel
         isOpen={reviewOpen}
         onClose={() => setReviewOpen(false)}
+      />
+
+      <ExportPanel
+        isOpen={exportOpen}
+        onClose={() => setExportOpen(false)}
       />
     </div>
   );

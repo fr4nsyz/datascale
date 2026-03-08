@@ -13,6 +13,7 @@ import labelsRouter from './routes/labels.js';
 import aiRouter from './routes/ai.js';
 import reviewsRouter from './routes/reviews.js';
 import tailnetRouter from './routes/tailnet.js';
+import exportRouter from './routes/export.js';
 
 // Ensure db is initialized (tables created on import)
 import db from './db.js';
@@ -69,6 +70,7 @@ app.use('/api/projects/:projectId/labels', labelsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/tailnet', tailnetRouter);
+app.use('/api/projects/:projectId/export', exportRouter);
 
 // GET /api/images/:imageId — fetch single image by ID (project-agnostic)
 app.get('/api/images/:imageId', (req, res) => {

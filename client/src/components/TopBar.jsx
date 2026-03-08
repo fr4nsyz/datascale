@@ -29,6 +29,7 @@ export default function TopBar({
   uiScale = 1,
   onOpenDashboard,
   onOpenReview,
+  onOpenExport,
   onToggleAnnotationVisibility,
   onNavigateImage,
   annotationsVisible = true,
@@ -497,6 +498,21 @@ export default function TopBar({
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   Quality Review
+                </div>
+                <div
+                  onClick={() => { onOpenExport?.(); setMoreOpen(false); }}
+                  style={{
+                    padding: '15px 24px',
+                    fontSize: 20,
+                    color: '#666',
+                    cursor: 'pointer',
+                    borderTop: '1px solid #f0f0f0',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  Export Dataset
                 </div>
                 <div
                   onClick={() => { navigate('/'); setMoreOpen(false); }}
